@@ -442,7 +442,7 @@ function bindRange(){$('#rf').addEventListener('change',function(e){RG.from=e.ta
 
 /* ================= 휴무 체크 ================= */
 var OF={ym:null,pick:null,roster:[],cells:{}};
-var KINDS=[['휴','휴무 (순번 자동)'],['△','△ 오전 휴무'],['○','○ 오후 휴무'],['*','* 심야'],['교','교 교육'],['v','v 지정 휴무'],['','지우기']];
+var KINDS=[['휴','휴무 (그날 신청 순번 자동)'],['△','△ 오전 휴무'],['○','○ 오후 휴무'],['*','* 심야'],['교','교 교육'],['v','v 지정 휴무'],['','지우기']];
 function isOff(v){return /^\d+$/.test(v)||/^v$/i.test(v)}
 function kcls(v){return isOff(v)?'k-off':v==='△'?'k-am':v==='○'?'k-pm':v==='*'?'k-nt':v==='교'?'k-ed':''}
 function canEdit(n){return ME.role==='admin'||ME.name===n}
@@ -450,30 +450,30 @@ async function offView(M){if(!OF.ym)OF.ym=today().slice(0,7);var a=await Promise
  a[1].forEach(function(c){(OF.cells[c.name]=OF.cells[c.name]||{})[c.day]=c.val});paintOff(M)}
 function paintOff(M){M=M||$('#main');var ym=OF.ym,y=+ym.slice(0,4),mo=+ym.slice(5,7),N=new Date(y,mo,0).getDate(),R=OF.roster;
  var dws=function(d){return DOW[new Date(y,mo-1,d).getDay()]};
- var h='<div class="row"><div><h2>휴무 체크</h2><p class="sub">내 줄의 칸을 눌러 휴무 희망일을 표시하세요. 숫자는 휴무 순번(먼저 원하는 순서)입니다. 관리자는 모든 줄을 고칠 수 있습니다.</p></div>'+
+ var h='<div class="row"><div><h2>휴무 체크</h2><p class="sub">내 줄의 칸을 눌러 휴무 희망일을 표시하세요. 숫자는 그날 휴무를 신청한 순서이며, 1팀 · 2팀을 통틀어 이어서 매겨집니다. 관리자는 모든 줄을 고칠 수 있습니다.</p></div>'+
   '<div class="range"><button class="btn plain sm" id="pm">◀</button><input type="month" id="ym" value="'+ym+'" style="width:auto"><button class="btn plain sm" id="nm">▶</button></div></div>'+
   '<div class="leg2"><span><i class="cell k-off">1</i>휴무(순번)</span><span><i class="cell k-off">v</i>지정 휴무</span><span><i class="cell k-am">△</i>오전</span><span><i class="cell k-pm">○</i>오후</span><span><i class="cell k-nt">*</i>심야</span><span><i class="cell k-ed">교</i>교육</span></div>';
  if(!R.length){M.innerHTML=h+'<div class="empty">명단이 아직 없습니다.'+(ME.role==='admin'?'<br>관리 탭에서 휴무표 엑셀을 가져오거나 인원을 추가하세요.':'<br>관리자에게 명단 등록을 요청하세요.')+'</div>';bindOffNav();return}
  if(!R.some(function(p){return p.name===ME.name})&&ME.role!=='admin')h+='<div class="notice">명단에서 「'+esc(ME.name)+'」 이름을 찾지 못해 고칠 수 있는 줄이 없습니다. 관리자에게 이름 확인을 요청하세요.</div>';
  h+='<div class="box" style="padding:0"><div class="scroll"><table class="off"><thead><tr><th class="nm">이름</th>';
  for(var d=1;d<=N;d++){var w=dws(d);h+='<th class="'+(w==='일'?'sun':w==='토'?'sat':'')+'">'+d+'<small>'+w+'</small></th>'}
- h+='<th>휴</th></tr></thead><tbody>';var cnt={},am={},pmc={};
- R.forEach(function(p,i){if(i===0||R[i-1].grp!==p.grp)h+='<tr class="sep"><td colspan="'+(N+2)+'">'+p.grp+'조</td></tr>';
+ h+='<th>휴</th></tr></thead><tbody>';var cnt={},allc={},am={},pmc={};
+ R.forEach(function(p,i){if(i===0||R[i-1].grp!==p.grp)h+='<tr class="sep"><td colspan="'+(N+2)+'">'+p.grp+'팀</td></tr>';
   var c=OF.cells[p.name]||{},ed=canEdit(p.name),off=0;cnt[p.grp]=cnt[p.grp]||{};
   h+='<tr class="'+(ME.name===p.name?'mine':'')+'"><td class="nm">'+esc(p.name)+'</td>';
   for(var d=1;d<=N;d++){var v=c[d]||'',pk=OF.pick&&OF.pick.n===p.name&&OF.pick.d===d,w=dws(d);
-   if(isOff(v)){off++;cnt[p.grp][d]=(cnt[p.grp][d]||0)+1}if(v==='△')am[d]=(am[d]||0)+1;if(v==='○')pmc[d]=(pmc[d]||0)+1;
+   if(isOff(v)){off++;cnt[p.grp][d]=(cnt[p.grp][d]||0)+1;allc[d]=(allc[d]||0)+1}if(v==='△')am[d]=(am[d]||0)+1;if(v==='○')pmc[d]=(pmc[d]||0)+1;
    h+='<td class="'+(w==='일'||w==='토'?'we':'')+(pk?' pk':'')+'">'+(ed?'<button class="cell '+kcls(v)+'" data-n="'+esc(p.name)+'" data-d="'+d+'" aria-label="'+esc(p.name)+' '+d+'일 '+(esc(v)||'빈칸')+'">'+esc(v)+'</button>':'<span class="cell '+kcls(v)+'">'+esc(v)+'</span>')+
     (pk?'<div class="menu">'+KINDS.map(function(k){return '<button data-v="'+esc(k[0])+'">'+esc(k[1])+'</button>'}).join('')+'</div>':'')+'</td>'}
   h+='<td class="n"><b>'+off+'</b></td></tr>'});
- h+='</tbody><tfoot>';Object.keys(cnt).sort().map(function(g){return [g+'조 휴무',cnt[g]]}).concat([['오전(△)',am],['오후(○)',pmc]]).forEach(function(x){h+='<tr><td class="nm">'+x[0]+'</td>';for(var d=1;d<=N;d++)h+='<td class="n">'+(x[1][d]||'')+'</td>';h+='<td></td></tr>'});
+ h+='</tbody><tfoot>';Object.keys(cnt).sort().map(function(g){return [g+'팀 휴무',cnt[g]]}).concat([['전체 휴무',allc],['오전(△)',am],['오후(○)',pmc]]).forEach(function(x){h+='<tr><td class="nm">'+x[0]+'</td>';for(var d=1;d<=N;d++)h+='<td class="n">'+(x[1][d]||'')+'</td>';h+='<td></td></tr>'});
  M.innerHTML=h+'</tfoot></table></div></div>';bindOffNav();
  [].forEach.call(M.querySelectorAll('button.cell'),function(b){b.addEventListener('click',function(e){e.stopPropagation();var n=b.dataset.n,d=+b.dataset.d;OF.pick=(OF.pick&&OF.pick.n===n&&OF.pick.d===d)?null:{n:n,d:d};paintOff()})});
  [].forEach.call(M.querySelectorAll('.menu button'),function(b){b.addEventListener('click',function(e){e.stopPropagation();setCell(OF.pick.n,OF.pick.d,b.dataset.v)})})}
 function bindOffNav(){var mv=function(k){var d=new Date(+OF.ym.slice(0,4),+OF.ym.slice(5,7)-1+k,1);OF.ym=d.getFullYear()+'-'+pad(d.getMonth()+1);OF.pick=null;route()};
  $('#pm').addEventListener('click',function(){mv(-1)});$('#nm').addEventListener('click',function(){mv(1)});$('#ym').addEventListener('change',function(e){if(e.target.value){OF.ym=e.target.value;OF.pick=null;route()}})}
 function setCell(n,d,v){if(!canEdit(n))return;var cur=OF.cells[n]=OF.cells[n]||{};
- if(v==='휴'){var mx=0;Object.keys(cur).forEach(function(k){if(/^\d+$/.test(cur[k]))mx=Math.max(mx,+cur[k])});v=String(mx+1)}
+ if(v==='휴'){var mx=0;Object.keys(OF.cells).forEach(function(nm){var x=(OF.cells[nm]||{})[d];if(nm!==n&&/^\d+$/.test(x||''))mx=Math.max(mx,+x)});v=String(mx+1)}   /* 순번: 그날 신청한 순서 — 1팀 · 2팀 통합 */
  var prev=cur[d];if(v)cur[d]=v;else delete cur[d];OF.pick=null;paintOff();
  api.setOff([{ym:OF.ym,name:n,day:d,val:v}]).catch(function(e){if(prev)cur[d]=prev;else delete cur[d];paintOff();fail(e)})}
 document.addEventListener('click',function(e){if(OF.pick&&!e.target.closest('.menu')){OF.pick=null;if(location.hash==='#off')paintOff()}});
@@ -492,8 +492,8 @@ async function adminView(M){var a=await Promise.all([api.profiles(),api.roster()
   ps.map(function(p){return '<tr><td><b>'+esc(p.name)+'</b>'+(R.some(function(r){return r.name===p.name})?'':' <span class="tag warn">명단에 없는 이름</span>')+'</td><td class="mono">'+esc(p.emp_no||'')+'</td><td>'+(p.approved?'승인':'<span class="tag warn">대기</span>')+'</td><td>'+(p.role==='admin'?'관리자':'팀원')+'</td><td>'+
    (p.id===ME.id?'<span class="mu">나</span>':(p.approved?'<button class="btn plain sm" data-p="'+p.id+'" data-a="off">승인 취소</button> ':'<button class="btn sm" data-p="'+p.id+'" data-a="on">승인</button> ')+
    '<button class="btn plain sm" data-p="'+p.id+'" data-a="'+(p.role==='admin'?'member':'admin')+'">'+(p.role==='admin'?'팀원으로':'관리자로')+'</button>')+'</td></tr>'}).join('')+'</tbody></table></div></div>';
- h+='<div class="box"><h3>휴무 명단<small>'+R.length+'명 · 순서대로 표시됩니다</small></h3><form class="range" id="rAdd"><label>이름<input id="r-n" required></label><label>조<select id="r-g"><option value="1">1조</option><option value="2">2조</option></select></label><button class="btn">추가</button></form>'+
-  '<div class="chips" style="margin-top:10px">'+R.map(function(p){return '<span>'+p.grp+'조 '+esc(p.name)+'<button data-rm="'+esc(p.name)+'" aria-label="'+esc(p.name)+' 삭제">×</button></span>'}).join('')+'</div></div>';
+ h+='<div class="box"><h3>휴무 명단<small>'+R.length+'명 · 순서대로 표시됩니다</small></h3><form class="range" id="rAdd"><label>이름<input id="r-n" required></label><label>팀<select id="r-g"><option value="1">1팀</option><option value="2">2팀</option></select></label><button class="btn">추가</button></form>'+
+  '<div class="chips" style="margin-top:10px">'+R.map(function(p){return '<span>'+p.grp+'팀 '+esc(p.name)+'<button data-rm="'+esc(p.name)+'" aria-label="'+esc(p.name)+' 삭제">×</button></span>'}).join('')+'</div></div>';
  if(!DEMO){var si=null;try{si=await api.syncInfo()}catch(e){}
   h+='<div class="box" style="display:grid;gap:10px"><h3>멸균팀 자료 연계<small>업무일지 · 월 KPI (읽기 전용)</small></h3>'+
    '<p class="sub">OEE 화면을 열 때 3시간마다 자동으로 받습니다. 지금 받으려면 아래 버튼을 누르세요. 토큰은 Supabase Secrets(MYEOLGYUN_TOKEN)에만 보관됩니다.</p>'+
@@ -541,7 +541,7 @@ async function importOff(wb){var names=wb.SheetNames.filter(function(n){return /
   var rg=XLSX.utils.decode_range(ws['!ref']),cols=[];for(var c=2;c<=rg.e.c;c++){var dd=num(cellV(ws,3,c));if(dd)cols.push([c,dd])}
   var list=[],g2=null;
   for(var r=5;r<=rg.e.r;r++){var a=cellV(ws,r,0),n=cellV(ws,r,1);
-   if(n==null||String(n).trim()===''){var gm=String(a||'').match(/2조\s*\(\s*(\d+)\s*~/);if(gm)g2=+gm[1];continue}
+   if(n==null||String(n).trim()===''){var gm=String(a||'').match(/2[조팀]\s*\(\s*(\d+)\s*~/);if(gm)g2=+gm[1];continue}
    n=String(n).trim();list.push({name:n,ord:num(a)||list.length+1});
    cols.forEach(function(cd){var v=cellV(ws,r,cd[0]);if(v!=null&&String(v).trim()!=='')cells.push({ym:ym,name:n,day:cd[1],val:String(v).trim()})})}
   list.forEach(function(p){p.grp=(g2&&p.ord>=g2)?2:1});if(!roster||ym>roster.ym)roster={ym:ym,list:list}});
