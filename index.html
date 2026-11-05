@@ -238,6 +238,10 @@ var api={
   if(DEMO){var o=L();rows.forEach(function(r){o.off=o.off.filter(function(x){return !(x.ym===r.ym&&x.name===r.name&&x.day===r.day)})});o.off=o.off.concat(put);LW(o);return Promise.resolve()}
   var p=Promise.resolve();if(put.length)p=p.then(function(){return sb.from('off_cells').upsert(put,{onConflict:'ym,name,day'}).then(chk)});
   del.forEach(function(r){p=p.then(function(){return sb.from('off_cells').delete().eq('ym',r.ym).eq('name',r.name).eq('day',r.day).then(chk)})});return p},
+ sterJournal:function(from,to){if(DEMO)return Promise.resolve(L().ster||[]);return sb.from('ster_journal').select('d,unit,idx,rec').gte('d',from).lte('d',to).range(0,9999).then(chk)},
+ syncInfo:function(){if(DEMO)return Promise.resolve(null);return sb.from('sync_log').select('*').eq('k','ster').maybeSingle().then(chk)},
+ sterSync:function(from,to){if(DEMO)return Promise.reject(new Error('데모 모드에서는 받을 수 없습니다'));
+  return sb.functions.invoke('ster-sync',{body:{from:from,to:to}}).then(async function(r){if(r.error){var m=r.error.message;try{var b=await r.error.context.json();if(b&&b.error)m=b.error}catch(e){}throw new Error(m)}if(r.data&&r.data.error)throw new Error(r.data.error);return r.data})},
  profiles:function(){if(DEMO)return Promise.resolve([ME]);return sb.from('profiles').select('*').order('created_at').then(chk)},
  setProfile:function(id,patch){if(DEMO)return Promise.resolve();return sb.from('profiles').update(patch).eq('id',id).then(chk)}
 };
@@ -287,6 +291,24 @@ function srcDays(from,to){var out={},by={};
  return out}
 function curRuns(){return (SRC.cur||[]).filter(function(r){return r&&r.start}).map(function(r){return {line:r._id,item:r.item,start:r.start,plan:r.plan,rate:r.rate}})}
 
+/* ================= 멸균팀 업무일지 → 멸균기 생산량(L) ================= */
+var STER={rows:[],info:null,state:'idle',err:''};
+function recKey(r,re){var ks=Object.keys(r||{});for(var i=0;i<ks.length;i++)if(re.test(ks[i]))return ks[i];return null}
+function recL(r){var k=recKey(r,/생산량.*L|^L$|liter|litre|prodL|qtyL|amountL|volL|totalL|^l_|_l$/i)||recKey(r,/생산량|prod(uct)?(ion)?_?qty|amount|volume/i);return k?num(r[k]):null}
+function recItem(r){var k=recKey(r,/품목|item|product|제품|품명/i);return k?String(r[k]||''):''}
+function toks(s){return String(s||'').replace(/\(.*?\)|외\s*\d+\s*종/g,' ').split(/[\s,·/+&]+/).map(function(t){return t.replace(/[^가-힣A-Za-z0-9]/g,'')}).filter(function(t){return t.length>=2})}
+function simil(a,b){var A=toks(a),B=toks(b);if(!A.length||!B.length)return 0;var n=0;A.forEach(function(t){if(B.some(function(u){return u.indexOf(t)>=0||t.indexOf(u)>=0}))n++});return n/A.length}
+/* 같은 날 멸균 호기별 합계를 만들고, 포장기 품목과 가장 닮은 호기를 고름 (보완 입력의 「연결 멸균호기」가 있으면 그 호기) */
+function sterFor(o){var day=STER.rows.filter(function(x){return x.d===o.d&&x.unit!=null});if(!day.length)return null;var by={};
+ day.forEach(function(x){var u=x.unit;by[u]=by[u]||{unit:u,L:0,n:0,items:[]};var l=recL(x.rec);if(l!=null){by[u].L+=l;by[u].n++}var it=recItem(x.rec);if(it&&by[u].items.indexOf(it)<0)by[u].items.push(it)});
+ var want=num(o.sup&&o.sup.ster);if(want!=null&&by[want])return Object.assign({how:'지정'},by[want]);
+ var best=null;Object.keys(by).forEach(function(u){var c=by[u],sc=simil(o.item,c.items.join(' '));if(sc>0&&(!best||sc>best.sc))best=Object.assign({sc:sc,how:'품목 일치'},c)});
+ return best&&best.L?best:null}
+async function sterLoad(from,to,auto){if(DEMO){STER.rows=L().ster||[];STER.state='ok';return}try{var a=await Promise.all([api.sterJournal(addD(from,-1),addD(to,1)),api.syncInfo()]);STER.rows=a[0];STER.info=a[1];STER.state='ok'}catch(e){STER.state='error';STER.err=errMsg(e);return}
+ /* 마지막으로 받은 지 3시간이 지났으면 뒤에서 새로 받음 (화면은 기다리지 않음) */
+ var old=!STER.info||Date.now()-Date.parse(STER.info.at)>3*3600e3;
+ if(auto&&old&&!STER.busy){STER.busy=true;api.sterSync(addD(today(),-14),today()).then(function(){STER.busy=false;if(location.hash==='#oee'||!location.hash)route()}).catch(function(e){STER.busy=false;STER.err=errMsg(e)})}}
+
 /* ================= OEE 계산 (OEE 일일 기록 양식과 같은 식) ================= */
 function build(from,to,daily,stops){var J=SRC.state==='ok'?srcDays(from,to):{},sup={},man={};
  daily.forEach(function(r){sup[r.d+'|'+r.line]=r});stops.forEach(function(s){var k=s.d+'|'+s.line;(man[k]=man[k]||[]).push(s)});
@@ -303,7 +325,7 @@ function build(from,to,daily,stops){var J=SRC.state==='ok'?srcDays(from,to):{},s
   else{o.src='엑셀';o.item=s.item;o.sip=tmin(s.sip);o.ps=tmin(s.ps);o.pe=tmin(s.pe);o.cip=tmin(s.cip);o.qty=num(s.qty);o.prodSpan=span(o.ps,o.pe);
    o.stops=(man[k]||[]).map(function(x){var a=tmin(x.t_start),b=tmin(x.t_end);return {id:x.id,key:x.t_start,a:a,b:b,min:span(a,b),why:x.content,auto:+x.code||6,code:+x.code||6,brk:String(x.brk||'N').toUpperCase(),src:'엑셀'}})
     .sort(function(x,y){return (x.a||0)-(y.a||0)})}
-  o.cap=o.rate||capOf(o.line,o.d);o.ml=num(s.ml);o.sterL=num(s.ster_l);o.order=num(s.order_qty)||o.planJ||null;
+  o.cap=o.rate||capOf(o.line,o.d);o.ml=num(s.ml);o.sterL=num(s.ster_l);o.sterSrc=o.sterL!=null?'입력':'';if(o.sterL==null){var sf=sterFor(o);if(sf){o.sterL=sf.L;o.sterSrc=sf.unit+'호기 ('+sf.how+')';o.sterUnit=sf.unit}}o.order=num(s.order_qty)||o.planJ||null;
   o.occ=span(o.sip,o.cip);o.down=o.stops.reduce(function(t,x){return t+(x.min||0)},0);
   o.net=o.prodSpan==null?null:o.prodSpan-o.down;
   o.A=(o.occ&&o.net!=null)?o.net/o.occ:null;
@@ -357,13 +379,16 @@ function srcBox(){var link='<a href="'+esc(FS.site)+'" target="_blank" rel="noop
   (cur.length?'<span class="mu">지금 생산 중: '+cur.map(function(r){return esc(r.line)+'호기 '+esc(r.item||'')}).join(', ')+' — 종료하면 반영</span>':'')+'</div>'}
  if(SRC.state==='loading')return '<div class="srcbar"><span class="dot"></span>생산 기록 불러오는 중…</div>';
  return '<div class="notice err">생산 기록을 불러오지 못했습니다: '+esc(SRC.err)+' <button class="link" id="sRefresh">다시 시도</button></div>'}
+function sterBox(){if(DEMO)return '';var i=STER.info;
+ if(STER.state==='error')return '<div class="notice err">멸균팀 자료를 읽지 못했습니다: '+esc(STER.err)+'</div>';
+ return '<div class="srcbar"><span class="dot'+(i?' ok':'')+'"></span><span>멸균팀 업무일지 연계 · '+(i?'멸균기 생산량 '+STER.rows.length+'건 <span class="mu">('+esc(String(i.at||'').slice(5,16).replace('T',' '))+' 받음)</span>':'아직 받은 자료 없음')+(STER.busy?' <span class="mu">· 새로 받는 중…</span>':'')+(STER.err&&!STER.busy?' <span class="mu">· 최근 받기 실패: '+esc(STER.err)+'</span>':'')+'</span></div>'}
 function bindSrc(){var r=$('#sRefresh');if(r)r.addEventListener('click',async function(){await srcPull(true);route()})}
 async function oeeView(M){if(!RG.to){RG.to=today();RG.from=RG.to.slice(0,8)+'01'}
- await srcPull(false);
+ await srcPull(false);await sterLoad(RG.from,RG.to,true);
  var a=await Promise.all([api.daily(RG.from,RG.to),api.stops(RG.from,RG.to)]);var rows=build(RG.from,RG.to,a[0],a[1]);
  var lines=LINES.filter(function(h){return rows.some(function(r){return r.line===h})});
  var h='<div class="row"><div><h2>포장기 OEE</h2><p class="sub">생산 기록(시작 · 종료 · 생산량 · 정지)에서 자동으로 계산합니다. 기록에 없는 용량 · 멸균기 적산량 · SIP 시작 · CIP 종료만 행을 눌러 채워 주세요.</p></div>'+
-  '<div class="range"><label>시작일<input type="date" id="rf" value="'+RG.from+'"></label><label>종료일<input type="date" id="rt" value="'+RG.to+'"></label><button class="btn plain sm" data-q="7">최근 7일</button><button class="btn plain sm" data-q="0">이번 달</button></div></div>'+srcBox();
+  '<div class="range"><label>시작일<input type="date" id="rf" value="'+RG.from+'"></label><label>종료일<input type="date" id="rt" value="'+RG.to+'"></label><button class="btn plain sm" data-q="7">최근 7일</button><button class="btn plain sm" data-q="0">이번 달</button></div></div>'+srcBox()+sterBox();
  if(!rows.length){M.innerHTML=h+'<div class="empty">이 기간에 계산할 기록이 없습니다.'+(SRC.state==='ok'?'<br>생산 기록 사이트에서 생산을 종료하면 여기에 나타납니다.':'')+'</div>';bindRange();bindSrc();return}
  h+='<div class="cards">'+lines.map(function(x){var a=agg(rows.filter(function(r){return r.line===x})),main=a.O!=null?a.O:a.AP;
   return '<div class="card"><div class="ct"><b>'+x+'호기</b><span>'+esc(MAKER[x])+' · CAPA '+(capOf(x,RG.to)||0).toLocaleString()+'/h</span></div>'+
@@ -392,9 +417,9 @@ function detail(r){var s=r.sup||{},j=r.j;
     '<td><select data-i="'+i+'" data-k="code">'+CODES.map(function(c,k){return '<option value="'+(k+1)+'"'+(x.code===k+1?' selected':'')+'>'+(k+1)+'. '+c+(x.auto===k+1&&r.src==='생산 기록'?' (자동)':'')+'</option>'}).join('')+'</select></td>'+
     '<td><select data-i="'+i+'" data-k="brk"><option'+(x.brk!=='Y'?' selected':'')+'>N</option><option'+(x.brk==='Y'?' selected':'')+'>Y</option></select></td></tr>'}).join('')+'</tbody></table></div>':'<div class="mu">정지 기록이 없습니다.</div>';
  if(j)h+='<p class="sub">생산 기록에서 읽은 값 — '+j.runs.map(function(x){return esc(x.item||'')+' '+hm(mod(x.start))+'~'+hm(mod(x.end))+' · '+(+x.produced||0).toLocaleString()+'개 (계획 '+(+x.plan||0).toLocaleString()+', 속도 '+(+x.rate||0).toLocaleString()+'/h)'}).join(' / ')+' · <a href="'+esc(FS.site)+'" target="_blank" rel="noopener">생산 기록 사이트에서 고치기 ↗</a></p>';
-  (CFG.portal?' · <a href="'+esc((CFG.portal||'').replace(/\/?$/,'/'))+'#/journals" target="_blank" rel="noopener">통합포털에서 일지 열기 ↗</a>':'')+'</p>';
  h+='</div><form id="supForm"><h4>보완 입력<small>생산 기록에 없는 값만</small></h4><div class="grid">'+
-  inp('ml','용량 (ml)',s.ml,'예: 190','number')+inp('ster_l','멸균기 적산량 (L)',s.ster_l,'멸균기 가동일지','number')+inp('sip','SIP 시작',s.sip,r.sipEst?'추정 '+hm(r.sip):'','time')+inp('cip','CIP 종료',s.cip,r.cipEst?'추정 '+hm(r.cip):'','time')+'</div>'+
+  inp('ml','용량 (ml)',s.ml,'예: 190','number')+'<label>연결 멸균호기<select id="x-ster"><option value="">자동 (품목으로 찾기)</option>'+[1,2,3,4,5].map(function(u){return '<option value="'+u+'"'+(String(s.ster||'')===String(u)?' selected':'')+'>'+u+'호기</option>'}).join('')+'</select></label>'+
+  inp('ster_l','멸균기 적산량 (L)',s.ster_l,r.sterSrc&&s.ster_l==null?'자동 '+Math.round(r.sterL).toLocaleString()+' ('+r.sterSrc+')':'멸균팀 자료가 없으면 입력','number')+inp('sip','SIP 시작',s.sip,r.sipEst?'추정 '+hm(r.sip):'','time')+inp('cip','CIP 종료',s.cip,r.cipEst?'추정 '+hm(r.cip):'','time')+'</div>'+
   '<details style="margin-top:10px"><summary class="mu" style="cursor:pointer;font-size:13px">생산 기록 값 바로잡기 (보통은 비워 둠)</summary><div class="grid" style="margin-top:8px">'+
   inp('order_qty','생산지시량 (개)',s.order_qty,j?String(j.plan||''):'','number')+inp('ps','생산 시작',s.ps,j?hm(j.ps):'','time')+inp('pe','생산 종료',s.pe,j?hm(j.pe):'','time')+inp('qty','포장 생산량 (개)',s.qty,j&&j.qty!=null?String(j.qty):'','number')+'</div></details>'+
   '<label style="margin-top:10px">비고<input id="x-note" value="'+esc(s.note||'')+'" placeholder="예: CIP 종료 = PLMS 건조 완료 판독"></label>'+
@@ -402,7 +427,7 @@ function detail(r){var s=r.sup||{},j=r.j;
  return h}
 function bindDetail(f,r){f.addEventListener('click',function(e){e.stopPropagation()});
  f.addEventListener('submit',function(e){e.preventDefault();var row={d:r.d,line:r.line,codes:(r.sup&&r.sup.codes)||null};
-  ['ml','order_qty','ster_l','qty'].forEach(function(k){row[k]=num($('#x-'+k).value)});['cip','sip','ps','pe'].forEach(function(k){row[k]=$('#x-'+k).value||null});row.note=$('#x-note').value.trim()||null;
+  ['ml','order_qty','ster_l','qty'].forEach(function(k){row[k]=num($('#x-'+k).value)});['cip','sip','ps','pe'].forEach(function(k){row[k]=$('#x-'+k).value||null});row.ster=$('#x-ster').value||null;row.note=$('#x-note').value.trim()||null;
   if(r.src==='수기')row.item=r.item;
   api.saveDaily(row).then(function(){toast('저장했습니다');route()}).catch(fail)});
  var tb=f.parentNode.querySelector('table.st');if(!tb)return;tb.addEventListener('click',function(e){e.stopPropagation()});
@@ -468,6 +493,12 @@ async function adminView(M){var a=await Promise.all([api.profiles(),api.roster()
    '<button class="btn plain sm" data-p="'+p.id+'" data-a="'+(p.role==='admin'?'member':'admin')+'">'+(p.role==='admin'?'팀원으로':'관리자로')+'</button>')+'</td></tr>'}).join('')+'</tbody></table></div></div>';
  h+='<div class="box"><h3>휴무 명단<small>'+R.length+'명 · 순서대로 표시됩니다</small></h3><form class="range" id="rAdd"><label>이름<input id="r-n" required></label><label>조<select id="r-g"><option value="1">1조</option><option value="2">2조</option></select></label><button class="btn">추가</button></form>'+
   '<div class="chips" style="margin-top:10px">'+R.map(function(p){return '<span>'+p.grp+'조 '+esc(p.name)+'<button data-rm="'+esc(p.name)+'" aria-label="'+esc(p.name)+' 삭제">×</button></span>'}).join('')+'</div></div>';
+ if(!DEMO){var si=null;try{si=await api.syncInfo()}catch(e){}
+  h+='<div class="box" style="display:grid;gap:10px"><h3>멸균팀 자료 연계<small>업무일지 · 월 KPI (읽기 전용)</small></h3>'+
+   '<p class="sub">OEE 화면을 열 때 3시간마다 자동으로 받습니다. 지금 받으려면 아래 버튼을 누르세요. 토큰은 Supabase Secrets(MYEOLGYUN_TOKEN)에만 보관됩니다.</p>'+
+   '<div class="range"><label>시작일<input type="date" id="sy-f" value="'+addD(today(),-30)+'"></label><label>종료일<input type="date" id="sy-t" value="'+today()+'"></label><button class="btn" id="sy-go">지금 받기</button></div>'+
+   '<div id="sy-msg">'+(si?'<div class="notice info">마지막으로 받은 시각 '+esc(String(si.at).slice(0,16).replace('T',' '))+' · '+esc((si.info||{}).from||'')+' ~ '+esc((si.info||{}).to||'')+' · 업무일지 '+((si.info||{}).journal||0)+'건 · KPI '+((si.info||{}).kpi||0)+'건</div>':'<div class="notice">아직 받은 적이 없습니다.</div>')+'</div>'+
+   (si&&si.info&&si.info.sample?'<details><summary class="mu" style="cursor:pointer;font-size:13px">받은 자료 한 줄 보기 (칸 이름 확인용)</summary><pre class="mono" style="white-space:pre-wrap;font-size:12px;background:var(--sunken);padding:10px;border-radius:8px;max-height:280px;overflow:auto">'+esc(JSON.stringify(si.info.sample,null,1))+'</pre></details>':'')+'</div>'}
  h+='<div class="box" style="display:grid;gap:10px"><h3>엑셀 가져오기</h3>'+
   '<label>휴무표 (「N월 휴무표」 시트 — 명단과 휴무 표시를 함께 가져옴)<input type="file" id="x-off" accept=".xlsx,.xls"></label>'+
   '<label>지난 OEE 기록 (OEE 일일 기록 양식 — 일지가 없던 날의 기록 보관용)<input type="file" id="x-oee" accept=".xlsx,.xls"></label>'+
@@ -480,6 +511,8 @@ async function adminView(M){var a=await Promise.all([api.profiles(),api.roster()
   api.saveRoster(rows).then(function(){toast('추가했습니다');route()}).catch(fail)});
  [].forEach.call(M.querySelectorAll('[data-rm]'),function(b){b.addEventListener('click',function(){if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='삭제?';return}api.delRoster(b.dataset.rm).then(route).catch(fail)})});
  $('#x-oee').addEventListener('change',function(e){importFile(e.target.files[0],importOee)});
+ var sg=$('#sy-go');if(sg)sg.addEventListener('click',function(){sg.disabled=true;sg.textContent='받는 중…';$('#sy-msg').innerHTML='<div class="notice info">멸균팀 포털에서 받는 중입니다. 몇 초 걸릴 수 있습니다…</div>';
+  api.sterSync($('#sy-f').value,$('#sy-t').value).then(function(r){toast('업무일지 '+r.journal+'건, KPI '+r.kpi+'건을 받았습니다');route()}).catch(function(e){sg.disabled=false;sg.textContent='지금 받기';$('#sy-msg').innerHTML='<div class="notice err">받지 못했습니다: '+esc(errMsg(e))+'</div>'})});
  $('#x-off').addEventListener('change',function(e){importFile(e.target.files[0],importOff)})}
 function needXLSX(){if(window.XLSX)return Promise.resolve();return new Promise(function(ok,no){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=ok;s.onerror=function(){no(new Error('엑셀 읽기 도구를 불러오지 못했습니다'))};document.head.appendChild(s)})}
 function importFile(f,fn){if(!f)return;var box=$('#x-msg');box.innerHTML='<div class="notice info">읽는 중…</div>';

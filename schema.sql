@@ -124,3 +124,37 @@ create policy o_read  on public.off_cells for select to authenticated using (pub
 create policy o_write on public.off_cells for all    to authenticated
   using (public.is_admin() or (public.is_approved() and name = public.my_name()))
   with check (public.is_admin() or (public.is_approved() and name = public.my_name()));
+
+-- 6) 업데이트 (2026-11-05): 생산 기록 자동 연결용 — 정지 사유 코드 수정값 저장 칸
+alter table public.oee_daily add column if not exists codes jsonb;
+
+-- 7) 업데이트 (2026-11-05): 멸균팀 업무포털 자료 연계 (읽기 전용으로 받아 와 보관)
+create table if not exists public.ster_journal (
+  d     date not null,           -- 날짜
+  unit  int,                     -- 멸균 호기 (1~5)
+  idx   int  not null,           -- 같은 날 순번
+  rec   jsonb not null,          -- 멸균팀 업무일지 한 줄 (품목 · 배치 · 멸균/생산/CIP 시각 · 생산량 L …)
+  primary key (d, idx)
+);
+create table if not exists public.ster_kpi (
+  month      text not null,      -- 2026-10
+  unit       text not null,      -- 1~5 · 전체
+  rec        jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (month, unit)
+);
+create table if not exists public.sync_log (
+  k    text primary key,         -- ster
+  at   timestamptz,
+  info jsonb
+);
+alter table public.ster_journal enable row level security;
+alter table public.ster_kpi     enable row level security;
+alter table public.sync_log     enable row level security;
+-- 승인된 팀원은 읽기만 가능. 쓰기는 Edge Function(ster-sync)만 함
+drop policy if exists sj_read on public.ster_journal;
+drop policy if exists sk_read on public.ster_kpi;
+drop policy if exists sl_read on public.sync_log;
+create policy sj_read on public.ster_journal for select to authenticated using (public.is_approved());
+create policy sk_read on public.ster_kpi     for select to authenticated using (public.is_approved());
+create policy sl_read on public.sync_log     for select to authenticated using (public.is_approved());

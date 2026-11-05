@@ -55,6 +55,19 @@ window.PACK_CFG = {
 alter table public.oee_daily add column if not exists codes jsonb;
 ```
 
+## 멸균팀 업무포털 연계 (멸균기 생산량 L 자동 입력)
+멸균팀 포털(https://myeolgyun-portal.vercel.app)의 업무일지 · 월 KPI를 **읽기 전용**으로 받아 와 양품률을 자동 계산합니다.
+토큰은 화면 코드(공개)에 넣지 않고 Supabase Secrets에만 둡니다.
+
+1. SQL Editor에서 `schema.sql`의 **7) 업데이트** 부분(ster_journal · ster_kpi · sync_log)을 실행합니다.
+2. **Edge Functions → Secrets → Add new secret**: 이름 `MYEOLGYUN_TOKEN`, 값 = 멸균팀에서 받은 토큰.
+3. **Edge Functions → Deploy a new function → Via Editor**: 이름 `ster-sync`,
+   `supabase/functions/ster-sync/index.ts` 내용을 붙여 넣고 **Deploy**.
+4. 사이트 **관리 → 멸균팀 자료 연계 → 지금 받기**. 이후로는 OEE 화면을 열 때 3시간마다 자동으로 받습니다.
+
+포장기와 멸균 호기는 **같은 날 품목 이름이 닮은 호기**로 자동 연결합니다. 틀리면 OEE 현황에서 행을 눌러 「연결 멸균호기」를 고르세요.
+멸균기 적산량을 직접 입력하면 그 값이 우선합니다.
+
 ## 계산 기준 (OEE 일일 기록 양식과 동일)
 - 시간가동률 = 순생산 시간 ÷ 점유시간(SIP 시작 ~ CIP 종료)
 - 순생산 시간 = 생산 시작 ~ 종료 − 정지시간 합
