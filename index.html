@@ -3,45 +3,94 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>상온포장팀 포털</title>
-<meta name="theme-color" content="#0d5c7a">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<title>상온포장팀 업무포털</title>
+<meta name="theme-color" content="#0B2545">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%20aria-hidden%3D%22true%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22ymbL%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2322417F%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%230A142B%22/%3E%3C/linearGradient%3E%3ClinearGradient%20id%3D%22ymgL%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23F1DDAE%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23B08A3E%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%229%22%20fill%3D%22url%28%23ymbL%29%22/%3E%3Crect%20x%3D%22.7%22%20y%3D%22.7%22%20width%3D%2230.6%22%20height%3D%2230.6%22%20rx%3D%228.3%22%20fill%3D%22none%22%20stroke%3D%22url%28%23ymgL%29%22%20stroke-opacity%3D%22.75%22%20stroke-width%3D%221.4%22/%3E%3Cpath%20d%3D%22M16%206.2c3.7%204.7%206.7%208.5%206.7%2011.9a6.7%206.7%200%200%201-13.4%200c0-3.4%203-7.2%206.7-11.9z%22%20fill%3D%22%23fff%22/%3E%3Cpath%20d%3D%22M10.2%2018.7c1.95-1.25%203.85-1.25%205.8%200s3.85%201.25%205.8%200%22%20fill%3D%22none%22%20stroke%3D%22url%28%23ymgL%29%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22/%3E%3Cpath%20d%3D%22M12.6%2015.6c.3-1.3%201-2.6%201.9-3.9%22%20fill%3D%22none%22%20stroke%3D%22%23C9D6F2%22%20stroke-width%3D%221.1%22%20stroke-linecap%3D%22round%22%20opacity%3D%22.9%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <style>
-/* 상단 바 + 탭(OEE 현황 · 입력 · 휴무 체크 · 바로가기 · 관리) — 요약 먼저, 상세는 아래 */
+/* 연세우유 상온제품생산부문 통합 업무포털과 같은 모양: 남색 상단 바 + 흰 왼쪽 메뉴 + 회색 바탕의 카드 */
 :root{
-  --bg:#f3f5f6; --surface:#fff; --sunken:#e8ecee; --line:#d3d9dc; --line2:#e6eaec;
-  --fg:#17212a; --muted:#5b6872; --accent:#0d5c7a; --accent-ink:#fff; --accent-soft:#dbecf2;
-  --good:#1d7a46; --good-soft:#dcf1e4; --warn:#a96a00; --warn-soft:#fbefd4; --bad:#b3261e; --bad-soft:#f9dedb;
-  --sat:#2f5fb3; --sun:#b3261e; --night:#1f2a37; --night-ink:#fff;
-  --c1:#8b95a7; --c2:#d64545; --c3:#7b5cd6; --c4:#e0a030; --c5:#2f6fd6; --c6:#6b7685; --c7:#12a39a; --c8:#1f3b7a;
-  --body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --navy:#0B2545; --navy2:#13315C; --gold:#C8A15A; --gold2:#E8D3A5;
+  --bg:#F5F7FA; --surface:#FFFFFF; --sunken:#EEF2F7; --line:#E3E8EF; --line2:#EEF2F7;
+  --fg:#16233A; --muted:#5B6B82; --faint:#93A1B5;
+  --accent:#1D4E89; --accent-ink:#FFFFFF; --accent-soft:#EAF1F8;
+  --good:#1B7F4E; --good-soft:#E8F5EE; --warn:#B7791F; --warn-soft:#FBF3E4; --bad:#B23A3A; --bad-soft:#FBECEC;
+  --sat:#1D4E89; --sun:#B23A3A; --night:#16233A; --night-ink:#fff;
+  --c1:#93A1B5; --c2:#B23A3A; --c3:#6A4FB3; --c4:#C8A15A; --c5:#1D4E89; --c6:#5B6B82; --c7:#1C8A86; --c8:#0B2545;
+  --shadow:0 1px 2px rgba(11,37,69,.06),0 8px 24px rgba(11,37,69,.06);
+  --body:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+  --mono:var(--body);
+  --side:236px; --top:60px;
+  color-scheme:light;
 }
-@media (prefers-color-scheme:dark){:root{
-  --bg:#0f161b; --surface:#17212a; --sunken:#1f2b34; --line:#2e3c46; --line2:#24313a;
-  --fg:#e6edf1; --muted:#9aa9b3; --accent:#5fb6d6; --accent-ink:#06222e; --accent-soft:#16384a;
-  --good:#5ccf8a; --good-soft:#163a26; --warn:#f0b54a; --warn-soft:#3d2d0c; --bad:#ff8a80; --bad-soft:#47201d;
-  --sat:#86aef5; --sun:#ff8a80; --night:#e6edf1; --night-ink:#0f161b; color-scheme:dark}}
-*{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55;padding-bottom:env(safe-area-inset-bottom,0px)}
-.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
-.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px 6px;flex-wrap:wrap}
-.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-.brand h1{margin:0;font-size:18px;font-weight:700}
-.brand span{font-size:12px;color:var(--muted)}
-.who{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
-.who b{color:var(--fg)}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
-nav a{flex:0 0 auto;padding:10px 14px;font-weight:600;font-size:14px;color:var(--muted);text-decoration:none;border-bottom:3px solid transparent}
-nav a.on{color:var(--accent);border-bottom-color:var(--accent)}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums;word-break:keep-all;overflow-wrap:anywhere}
+/* 상단 바 */
+.topbar{position:fixed;top:0;left:0;right:0;height:calc(var(--top) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) max(18px,env(safe-area-inset-right,0px)) 0 max(18px,env(safe-area-inset-left,0px));background:var(--navy);color:#fff;display:flex;align-items:center;gap:16px;z-index:40}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:15px;white-space:nowrap;color:#fff;text-decoration:none}
+.logo b{font-weight:600;opacity:.8}
+.topbar .div{width:1px;height:22px;background:rgba(255,255,255,.22)}
+.topbar .team{font-size:14px;font-weight:700;color:var(--gold2);white-space:nowrap}
+.who{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:13px;color:rgba(255,255,255,.8);white-space:nowrap}
+.who b{color:#fff}.who .tag{background:rgba(255,255,255,.14);color:#fff}.who .tag.warn{background:var(--gold);color:var(--navy)}
+.who .link{color:#fff;opacity:.85}
+.av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--gold2),var(--gold));color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:13px}
+/* 왼쪽 메뉴 */
+#nav{position:fixed;top:calc(var(--top) + env(safe-area-inset-top,0px));left:0;bottom:0;width:var(--side);background:var(--surface);border-right:1px solid var(--line);overflow-y:auto;padding:14px 10px 30px;z-index:30}
+#nav .gt{font-size:11px;font-weight:700;letter-spacing:.1em;color:var(--faint);padding:16px 12px 6px}
+#nav .gt:first-child{padding-top:4px}
+#nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;font-size:14px;font-weight:600;color:var(--fg);text-decoration:none}
+#nav a span{width:20px;text-align:center;color:var(--muted)}
+#nav a:hover{background:var(--sunken)}
+#nav a.on{background:var(--accent-soft);color:var(--accent)}#nav a.on span{color:var(--accent)}
+#nav[hidden]{display:none!important}
+#nav .foot{margin:22px 12px 0;padding-top:14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint);line-height:1.6}
+main{margin-left:var(--side);padding:calc(var(--top) + env(safe-area-inset-top,0px) + 24px) max(28px,env(safe-area-inset-right,0px)) 60px 28px;display:grid;gap:18px;max-width:1240px;min-width:0}
+body.noside main{margin-left:0;margin-inline:auto}
+@media (max-width:900px){
+  #nav{top:calc(var(--top) + env(safe-area-inset-top,0px));bottom:auto;right:0;width:auto;height:auto;display:flex;gap:4px;overflow-x:auto;padding:8px max(12px,env(safe-area-inset-left,0px));border-right:0;border-bottom:1px solid var(--line);scrollbar-width:none}
+  #nav .gt,#nav .foot{display:none}#nav a{flex:0 0 auto;padding:7px 12px;font-size:13.5px}
+  main{margin-left:0;padding:calc(var(--top) + env(safe-area-inset-top,0px) + 70px) max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
+  .topbar .team,.topbar .div,.logo b{display:none}
+}
+h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em;text-wrap:balance}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.14em;color:var(--gold);text-transform:uppercase;margin-bottom:2px}
+.box,.card,.srcbar{box-shadow:var(--shadow)}
+.btn{border-radius:9px}
+/* 홈 */
+.hero{position:relative;overflow:hidden;border-radius:16px;padding:26px 28px;background:linear-gradient(135deg,#0A1530 0%,#13315C 60%,#1D4E89 100%);color:#fff;display:grid;gap:6px}
+.hero::after{content:"";position:absolute;right:-60px;top:-60px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(232,211,165,.22),rgba(232,211,165,0) 70%)}
+.hero .eyebrow{color:var(--gold2)}
+.hero h2{font-size:24px;color:#fff}.hero p{margin:0;color:rgba(255,255,255,.78);font-size:14px}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow);display:grid;gap:4px;border-top:3px solid var(--kc,var(--accent))}
+.kpi .kl{font-size:12.5px;font-weight:700;color:var(--muted)}
+.kpi .kval{font-size:28px;font-weight:800;line-height:1.15;letter-spacing:-.01em}
+.kpi .kval small{font-size:13px;font-weight:600;color:var(--muted);margin-left:3px}
+.kpi .ks{font-size:12.5px;color:var(--muted)}
+.dash{display:grid;gap:14px;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}@media (max-width:1000px){.dash{grid-template-columns:1fr}}
+.hb{display:grid;gap:8px}.hb .r{display:grid;grid-template-columns:52px minmax(0,1fr) 64px;gap:10px;align-items:center;font-size:13px}
+.hb .bar{height:10px;border-radius:5px;background:var(--sunken);overflow:hidden}.hb .bar i{display:block;height:100%;border-radius:5px;background:var(--accent)}
+.hb .r b{text-align:right}
+*{box-sizing:border-box}
+
+
+
+
+
+
+
+
+
+
+
+
+
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-main{padding-block:20px 56px;display:grid;gap:18px}
-h2{margin:0;font-size:20px;font-weight:700;text-wrap:balance}
+
+
 h3{margin:0 0 10px;font-size:15px;font-weight:700}
 h3 small,h4 small{font-weight:500;color:var(--muted);font-size:12px;margin-left:6px}
 .sub{margin:3px 0 0;color:var(--muted);font-size:13px;max-width:70ch}
@@ -149,22 +198,27 @@ sup{color:var(--warn);font-weight:700}
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap">
-    <div class="top">
-      <div class="brand"><h1>상온포장팀 포털</h1><span>상온제품생산부문 · 상온제품포장팀</span></div>
-      <div class="who" id="who"></div>
-    </div>
-    <nav id="nav" aria-label="메뉴" hidden>
-      <a href="#oee" data-t="oee">OEE 현황</a>
-      <a href="#off" data-t="off">휴무 체크</a>
-      <a href="#hp" data-t="hp">인시생산성</a>
-      <a href="#links" data-t="links">일지 작성</a>
-      <a href="#admin" data-t="admin" id="navAdmin" hidden>관리</a>
-    </nav>
-  </div>
+<header class="topbar">
+  <a class="logo" href="#home"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="ymbL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22417F"/><stop offset="1" stop-color="#0A142B"/></linearGradient><linearGradient id="ymgL" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F1DDAE"/><stop offset="1" stop-color="#B08A3E"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#ymbL)"/><rect x=".7" y=".7" width="30.6" height="30.6" rx="8.3" fill="none" stroke="url(#ymgL)" stroke-opacity=".75" stroke-width="1.4"/><path d="M16 6.2c3.7 4.7 6.7 8.5 6.7 11.9a6.7 6.7 0 0 1-13.4 0c0-3.4 3-7.2 6.7-11.9z" fill="#fff"/><path d="M10.2 18.7c1.95-1.25 3.85-1.25 5.8 0s3.85 1.25 5.8 0" fill="none" stroke="url(#ymgL)" stroke-width="1.7" stroke-linecap="round"/><path d="M12.6 15.6c.3-1.3 1-2.6 1.9-3.9" fill="none" stroke="#C9D6F2" stroke-width="1.1" stroke-linecap="round" opacity=".9"/></svg><span>연세우유 <b>상온제품생산부문</b></span></a>
+  <div class="div"></div>
+  <div class="team">상온포장팀 업무포털</div>
+  <div class="who" id="who"></div>
 </header>
-<main class="wrap" id="main"><div class="empty">불러오는 중…</div></main>
+<nav id="nav" aria-label="메뉴" hidden>
+  <div class="gt">대시보드</div>
+  <a href="#home" data-t="home"><span>⌂</span>홈</a>
+  <div class="gt">생산 분석</div>
+  <a href="#oee" data-t="oee"><span>◔</span>포장기 OEE</a>
+  <a href="#hp" data-t="hp"><span>▤</span>인시생산성</a>
+  <div class="gt">근무</div>
+  <a href="#off" data-t="off"><span>☑</span>휴무 체크</a>
+  <div class="gt">일지 · 자료</div>
+  <a href="#links" data-t="links"><span>✎</span>일지 작성</a>
+  <div class="gt" id="navAdminG" hidden>시스템</div>
+  <a href="#admin" data-t="admin" id="navAdmin" hidden><span>⚙</span>관리</a>
+  <div class="foot">연세우유 상온제품생산부문<br>상온제품포장팀</div>
+</nav>
+<main id="main"><div class="empty">불러오는 중…</div></main>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -422,17 +476,17 @@ function bindAuth(mode){$('#authForm').addEventListener('submit',async function(
   catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';if(/email address .* is invalid/i.test(m))m='가입용 주소 형식을 Supabase가 받지 않습니다. config.js의 emailPattern을 실제 메일 도메인으로 바꿔 주세요.';msg.textContent=m;msg.hidden=false}})}
 
 /* ================= 화면 전환 ================= */
-var TABS=['oee','off','hp','links','admin'];
-async function route(){var t=location.hash.slice(1)||'oee';if(TABS.indexOf(t)<0)t='oee';if(t==='admin'&&ME.role!=='admin')t='oee';
+var TABS=['home','oee','off','hp','links','admin'];
+async function route(){var t=location.hash.slice(1)||'home';if(TABS.indexOf(t)<0)t='home';if(t==='admin'&&ME.role!=='admin')t='home';
  [].forEach.call(document.querySelectorAll('nav a'),function(a){a.classList.toggle('on',a.dataset.t===t)});
- var M=$('#main');try{if(t==='oee')await oeeView(M);else if(t==='off')await offView(M);else if(t==='hp')await hpView(M);else if(t==='links')linksView(M);else await adminView(M)}
+ var M=$('#main');try{if(t==='home')await homeView(M);else if(t==='oee')await oeeView(M);else if(t==='off')await offView(M);else if(t==='hp')await hpView(M);else if(t==='links')linksView(M);else await adminView(M)}
  catch(e){console.error(e);M.innerHTML='<div class="notice err">불러오지 못했습니다: '+esc(errMsg(e))+'</div>'}}
 window.addEventListener('hashchange',function(){if(ME&&ME.approved)route()});
-async function boot(){await loadMe();var who=$('#who'),nav=$('#nav'),M=$('#main');
+async function boot(){await loadMe();var who=$('#who'),nav=$('#nav'),M=$('#main');document.body.classList.add('noside');
  if(!ME){nav.hidden=true;who.innerHTML='';M.innerHTML=authView('login');bindAuth('login');return}
- who.innerHTML=(DEMO?'<span class="tag warn">데모 모드</span>':'')+'<b>'+esc(ME.name)+'</b>'+(ME.role==='admin'?' <span class="tag">관리자</span>':'')+(DEMO?'':' <button class="link" onclick="P.logout()">로그아웃</button>');
+ who.innerHTML=(DEMO?'<span class="tag warn">데모 모드</span>':'')+'<span class="av">'+esc((ME.name||'?').slice(0,1))+'</span><b>'+esc(ME.name)+'</b>'+(ME.role==='admin'?' <span class="tag">관리자</span>':'')+(DEMO?'':' <button class="link" onclick="P.logout()">로그아웃</button>');
  if(!ME.approved){nav.hidden=true;M.innerHTML='<div class="auth"><div class="notice info">가입 신청이 접수되었습니다. 관리자가 승인하면 바로 사용할 수 있습니다.</div><button class="btn plain" onclick="P.boot()">다시 확인</button></div>';return}
- nav.hidden=false;$('#navAdmin').hidden=ME.role!=='admin';route()}
+ nav.hidden=false;document.body.classList.remove('noside');$('#navAdmin').hidden=ME.role!=='admin';$('#navAdminG').hidden=ME.role!=='admin';route()}
 
 /* ================= OEE 현황 ================= */
 var RG={from:null,to:null,open:null};
@@ -459,7 +513,7 @@ async function oeeView(M){if(!RG.to){RG.to=today();RG.from=RG.to.slice(0,8)+'01'
  await Promise.all([srcPull(false),portalPull(false)]);await sterLoad(RG.from,RG.to,true);
  var a=await Promise.all([api.daily(RG.from,RG.to),api.stops(RG.from,RG.to)]);var rows=build(RG.from,RG.to,a[0],a[1]);
  var lines=LINES.filter(function(h){return rows.some(function(r){return r.line===h})});
- var h='<div class="row"><div><h2>포장기 OEE</h2><p class="sub">생산 기록(시작 · 종료 · 생산량 · 정지)에서 자동으로 계산합니다. 기록에 없는 용량 · 멸균기 적산량 · SIP 시작 · CIP 종료만 행을 눌러 채워 주세요.</p></div>'+
+ var h='<div class="row"><div><div class="eyebrow">Production · OEE</div><h2>포장기 OEE</h2><p class="sub">생산 기록(시작 · 종료 · 생산량 · 정지)에서 자동으로 계산합니다. 기록에 없는 용량 · 멸균기 적산량 · SIP 시작 · CIP 종료만 행을 눌러 채워 주세요.</p></div>'+
   '<div class="range"><label>시작일<input type="date" id="rf" value="'+RG.from+'"></label><label>종료일<input type="date" id="rt" value="'+RG.to+'"></label><button class="btn plain sm" data-q="7">최근 7일</button><button class="btn plain sm" data-q="0">이번 달</button></div></div>'+srcBox()+portalBox()+sterBox();
  if(!rows.length){M.innerHTML=h+'<div class="empty">이 기간에 계산할 기록이 없습니다.'+(SRC.state==='ok'?'<br>생산 기록 사이트에서 생산을 종료하면 여기에 나타납니다.':'')+'</div>';bindRange();bindSrc();return}
  h+='<div class="cards">'+lines.map(function(x){var a=agg(rows.filter(function(r){return r.line===x})),main=a.O!=null?a.O:a.AP;
@@ -522,7 +576,7 @@ async function offView(M){if(!OF.ym)OF.ym=today().slice(0,7);var a=await Promise
  a[1].forEach(function(c){(OF.cells[c.name]=OF.cells[c.name]||{})[c.day]=c.val});paintOff(M)}
 function paintOff(M){M=M||$('#main');var ym=OF.ym,y=+ym.slice(0,4),mo=+ym.slice(5,7),N=new Date(y,mo,0).getDate(),R=OF.roster;
  var dws=function(d){return DOW[new Date(y,mo-1,d).getDay()]};
- var h='<div class="row"><div><h2>휴무 체크</h2><p class="sub">내 줄의 칸을 눌러 휴무 희망일을 표시하세요. 숫자는 그날 휴무를 신청한 순서이며, 1팀 · 2팀을 통틀어 이어서 매겨집니다. 관리자는 모든 줄을 고칠 수 있습니다.</p></div>'+
+ var h='<div class="row"><div><div class="eyebrow">Work · Day off</div><h2>휴무 체크</h2><p class="sub">내 줄의 칸을 눌러 휴무 희망일을 표시하세요. 숫자는 그날 휴무를 신청한 순서이며, 1팀 · 2팀을 통틀어 이어서 매겨집니다. 관리자는 모든 줄을 고칠 수 있습니다.</p></div>'+
   '<div class="range"><button class="btn plain sm" id="pm">◀</button><input type="month" id="ym" value="'+ym+'" style="width:auto"><button class="btn plain sm" id="nm">▶</button></div></div>'+
   '<div class="leg2"><span><i class="cell k-off">1</i>휴무(순번)</span><span><i class="cell k-off">v</i>지정 휴무</span><span><i class="cell k-am">△</i>오전</span><span><i class="cell k-pm">○</i>오후</span><span><i class="cell k-nt">*</i>심야</span><span><i class="cell k-ed">교</i>교육</span></div>';
  if(!R.length){M.innerHTML=h+'<div class="empty">명단이 아직 없습니다.'+(ME.role==='admin'?'<br>관리 탭에서 휴무표 엑셀을 가져오거나 인원을 추가하세요.':'<br>관리자에게 명단 등록을 요청하세요.')+'</div>';bindOffNav();return}
@@ -592,7 +646,7 @@ async function hpView(M){if(!HP.mon)HP.mon=monday(today());var days=[];for(var i
      (on?'<tr class="det"><td colspan="11">'+hpEditor(kind,o,heads.by[o.d])+'</td></tr>':'')}).join('')+
    '<tr class="sum"><td>주 합계</td><td class="n">'+s.qty.toLocaleString()+'</td><td class="n">'+fh(s.h1)+'</td><td class="n">'+f1(s.p1)+'</td><td class="n">'+fh(s.h2)+'</td><td class="n">'+f1(s.p2)+'</td><td class="n">'+fh(s.h)+'</td><td class="n"><b>'+f1(s.p)+'</b></td><td class="n">'+s.n+'</td><td class="n">'+s.n1+'</td><td class="n">'+s.n2+'</td></tr></tbody></table></div>'};
  var wn=weekName(HP.mon);
- var h='<div class="row"><div><h2>인시생산성</h2><p class="sub">인시생산성 = 그날 전체 생산량 ÷ 투입시간. 투입시간 = 출근 인원 × 8시간 + 연장. 행을 눌러 입력합니다. 실적 생산량은 생산 기록에서 자동으로 채웁니다.</p></div>'+
+ var h='<div class="row"><div><div class="eyebrow">Production · Man-hour</div><h2>인시생산성</h2><p class="sub">인시생산성 = 그날 전체 생산량 ÷ 투입시간. 투입시간 = 출근 인원 × 8시간 + 연장. 행을 눌러 입력합니다. 실적 생산량은 생산 기록에서 자동으로 채웁니다.</p></div>'+
   '<div class="range"><button class="btn plain sm" id="hp-p">◀</button><b style="padding:0 6px">'+wn+' <span class="mu" style="font-weight:500">('+md(days[0])+' ~ '+md(days[6])+')</span></b><button class="btn plain sm" id="hp-n">▶</button><button class="btn plain sm" id="hp-x">엑셀로 내보내기</button></div></div>';
  h+='<details class="box" id="hp-pdf"'+(HP.pdfOpen?' open':'')+'><summary style="cursor:pointer;font-weight:700">근무표 · 생산계획 PDF로 예상 채우기</summary><p class="sub" style="margin-top:6px">배포받은 PDF 두 개를 고르면 생산량, 호기 생산시간, 1팀 · 2팀 인원(평일 팀장 포함), 연장(23 · 24시 종료 라인의 오후조와 오후 조장)을 계산해 보여 줍니다. 확인한 뒤 저장하세요.</p>'+
   '<div class="grid" style="margin-top:8px"><label>생산계획 PDF (상온제품 주간생산계획)<input type="file" id="hp-pdf-plan" accept=".pdf"></label><label>근무표 PDF (상온제품포장팀 주간근무 계획서)<input type="file" id="hp-pdf-sch" accept=".pdf"></label></div>'+
@@ -746,16 +800,50 @@ async function hpPdfFill(){var pf=$('#hp-pdf-plan').files[0],sf=$('#hp-pdf-sch')
    '<div class="row"><span class="mu" style="font-size:12.5px">저장하면 이 주의 예상 표를 위 값으로 바꿉니다.</span><button class="btn" id="hp-pdf-save">예상에 저장</button></div></div>';
   $('#hp-pdf-save').addEventListener('click',async function(){var b=this;b.disabled=true;try{for(var i=0;i<HP.pdfRows.length;i++)await api.saveHp(HP.pdfRows[i]);HP.mon=monday(HP.pdfRows[0].d);HP.pdfOpen=false;toast('예상 '+HP.pdfRows.length+'일치를 저장했습니다');route()}catch(e){b.disabled=false;fail(e)}})}
  catch(e){console.error(e);box.innerHTML='<div class="notice err">읽지 못했습니다: '+esc(errMsg(e))+'</div>'}}
+/* ================= 홈 (대시보드) ================= */
+async function homeView(M){var td=today(),mon=monday(td),days=[];for(var i=0;i<7;i++)days.push(addD(mon,i));
+ M.innerHTML='<div class="empty">대시보드를 불러오는 중…</div>';
+ await Promise.all([srcPull(false),portalPull(false)]);await sterLoad(mon,td,true);
+ var a=await Promise.all([api.daily(mon,td),api.stops(mon,td),api.hp(days[0],days[6]),hpHeads([td]).catch(function(){return {by:{}}})]);
+ var rows=build(mon,td,a[0],a[1]),all=agg(rows),hd=a[3].by[td]||null,hpRows=a[2];
+ var main=all.O!=null?all.O:all.AP,cur=curRuns();
+ var hpP=hpSum(days.map(function(d){var r=hpRows.filter(function(x){return x.d===d&&x.kind==='plan'})[0];return r?hpCalc(r):null}).filter(Boolean));
+ var hpA=hpSum(days.map(function(d){var saved=hpRows.filter(function(x){return x.d===d&&x.kind==='act'})[0],r=Object.assign({d:d},saved||{});
+  if(r.qty==null||r.qty===''){var q=actQty(d);if(q==null&&!saved)return null;r.qty=q}return hpCalc(r)}).filter(Boolean));
+ var hr=new Date().getHours(),hi=hr<11?'좋은 아침입니다':hr<17?'오늘도 안전한 작업 되세요':'오늘 하루 수고 많으셨습니다';
+ var h='<section class="hero"><div class="eyebrow">Yonsei Milk · Ambient Packaging Team</div><h2>'+esc(ME.name)+' 님, '+hi+'</h2><p>'+(+td.slice(5,7))+'월 '+(+td.slice(8,10))+'일 ('+dw(td)+') · '+weekName(mon)+' · 상온제품포장팀 업무포털</p></section>';
+ h+='<div class="kpis">'+
+  '<div class="kpi" style="--kc:var(--accent)"><div class="kl">이번 주 포장기 OEE</div><div class="kval '+grade(main)+'">'+pct(main)+'</div><div class="ks">'+(all.O!=null?'시간 '+pct(all.A)+' · 성능 '+pct(all.P)+' · 양품 '+pct(all.Q):'시간 × 성능 (양품률 자료 대기)')+'</div></div>'+
+  '<div class="kpi" style="--kc:var(--gold)"><div class="kl">지금 생산 중</div><div class="kval">'+cur.length+'<small>개 호기</small></div><div class="ks">'+(cur.length?cur.map(function(r){return esc(r.line)+'호기 '+esc(r.item||'')}).join(' · '):(SRC.state==='ok'?'생산 중인 호기 없음':'생산 기록 연결 확인 필요'))+'</div></div>'+
+  '<div class="kpi" style="--kc:var(--good)"><div class="kl">이번 주 인시생산성 (실)</div><div class="kval">'+(hpA.h?f1(hpA.p):'-')+'<small>EA/h</small></div><div class="ks">예상 '+(hpP.h?f1(hpP.p):'-')+' · 실 생산량 '+(hpA.qty||0).toLocaleString()+'개</div></div>'+
+  '<div class="kpi" style="--kc:var(--bad)"><div class="kl">오늘 휴무 (휴무 체크 기준)</div><div class="kval">'+(hd?(hd.off1+hd.off2):'-')+'<small>명</small></div><div class="ks">'+(hd?'1팀 '+hd.off1+' · 2팀 '+hd.off2:'명단 없음')+'</div></div></div>';
+ var lines=LINES.filter(function(x){return rows.some(function(r){return r.line===x})});
+ var bars=lines.map(function(x){var g=agg(rows.filter(function(r){return r.line===x})),v=g.O!=null?g.O:g.AP;
+  return '<div class="r"><b style="text-align:left">'+x+'호기</b><span class="bar"><i style="width:'+Math.min(100,Math.round((v||0)*100))+'%;background:'+(v>=0.85?'var(--good)':v>=0.65?'var(--accent)':'var(--bad)')+'"></i></span><b>'+pct(v)+'</b></div>'}).join('');
+ var st=[];rows.forEach(function(r){r.stops.forEach(function(x){if(x.min)st.push({d:r.d,line:r.line,min:x.min,why:x.why,code:x.code})})});st.sort(function(p,q){return q.min-p.min});
+ h+='<div class="dash"><div class="box"><h3>호기별 OEE<small>'+md(mon)+' ~ '+md(td)+'</small></h3>'+(bars?'<div class="hb">'+bars+'</div>':'<div class="empty">이번 주 기록이 아직 없습니다.</div>')+'<div style="margin-top:12px"><a class="btn plain sm" href="#oee">포장기 OEE 자세히 →</a></div></div>'+
+  '<div class="box"><h3>이번 주 긴 정지<small>분 기준 상위 5건</small></h3>'+(st.length?'<table><tbody>'+st.slice(0,5).map(function(x){return '<tr><td>'+md(x.d)+' '+x.line+'호기</td><td class="n">'+x.min+'분</td><td style="white-space:normal">'+esc(x.why||'')+' <span class="tag">'+esc(CODES[x.code-1]||'')+'</span></td></tr>'}).join('')+'</tbody></table>':'<div class="empty">정지 기록이 없습니다.</div>')+'</div></div>';
+ var P2=(CFG.portal||'').replace(/\/?$/,'/'),dot=function(ok){return '<span class="dot'+(ok?' ok':'')+'"></span>'};
+ h+='<div class="dash"><div class="box"><h3>자료 연결</h3><div style="display:grid;gap:8px;font-size:13.5px">'+
+  '<div style="display:flex;gap:8px;align-items:center">'+dot(SRC.state==='ok')+'생산 기록 (생산 · 정지) '+(SRC.state==='ok'?'<span class="mu">'+hm(mod(SRC.at))+' 기준</span>':'<span class="mu">연결 안 됨</span>')+'</div>'+
+  '<div style="display:flex;gap:8px;align-items:center">'+dot(PD.state==='ok')+'통합포털 포장팀 일지 '+(PD.state==='ok'?'<span class="mu">연결됨</span>':'<a class="link" href="#oee">포장기 OEE에서 연결</a>')+'</div>'+
+  (DEMO?'':'<div style="display:flex;gap:8px;align-items:center">'+dot(!!STER.info)+'멸균팀 업무일지 '+(STER.info?'<span class="mu">'+esc(String(STER.info.at).slice(5,16).replace('T',' '))+' 받음</span>':'<span class="mu">아직 받은 자료 없음</span>')+'</div>')+'</div></div>'+
+  '<div class="box"><h3>바로가기</h3><div class="links" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">'+
+  '<a href="'+esc(P2+'#/journals')+'" target="_blank" rel="noopener"><b>일지 작성 ↗</b><span>통합포털 포장팀 일지함</span></a>'+
+  '<a href="'+esc(FS.site)+'" target="_blank" rel="noopener"><b>생산 기록 ↗</b><span>생산 시작 · 종료 · 정지 입력</span></a>'+
+  '<a href="#hp"><b>인시생산성</b><span>이번 주 예상 · 실</span></a><a href="#off"><b>휴무 체크</b><span>'+(+td.slice(5,7))+'월 휴무 희망</span></a></div></div></div>';
+ M.innerHTML=h}
+
 /* ================= 일지 작성 바로가기 ================= */
 function linksView(M){var P=(CFG.portal||'').replace(/\/?$/,'/');
  var L2=[['일지 작성 (포장팀)','통합포털 포장팀 일지함','#/journals'],['포장 공정 분석','생산작업일보 · 정지 · 불량팩 자동 분석','#/pack'],['전자결재','결재 요청 · 승인','#/approval']];
  var ext='<a href="'+esc(FS.site)+'" target="_blank" rel="noopener"><b>생산 기록 (포장팀 업무 포털) ↗</b><span>생산 시작 · 종료 · 정지 입력 — OEE에 자동 반영</span></a>';
- M.innerHTML='<div><h2>일지 작성</h2><p class="sub">일지는 통합포털에서 작성합니다. 누르면 새 창으로 열립니다(통합포털 로그인 필요).</p></div><div class="links">'+
+ M.innerHTML='<div><div class="eyebrow">Documents · Journals</div><h2>일지 작성</h2><p class="sub">일지는 통합포털에서 작성합니다. 누르면 새 창으로 열립니다(통합포털 로그인 필요).</p></div><div class="links">'+
   L2.map(function(x){return '<a href="'+esc(P+x[2])+'" target="_blank" rel="noopener"><b>'+esc(x[0])+' ↗</b><span>'+esc(x[1])+'</span></a>'}).join('')+ext+'</div>'}
 
 /* ================= 관리 ================= */
 async function adminView(M){var a=await Promise.all([api.profiles(),api.roster()]),ps=a[0],R=a[1];
- var h='<div><h2>관리</h2><p class="sub">가입 승인, 휴무 명단, 엑셀 가져오기를 관리합니다.</p></div>';
+ var h='<div><div class="eyebrow">System · Admin</div><h2>관리</h2><p class="sub">가입 승인, 휴무 명단, 엑셀 가져오기를 관리합니다.</p></div>';
  if(!DEMO)h+='<div class="box"><h3>가입 승인<small>'+ps.filter(function(p){return !p.approved}).length+'명 대기</small></h3><div class="scroll"><table><thead><tr><th>이름</th><th>사번</th><th>상태</th><th>권한</th><th></th></tr></thead><tbody>'+
   ps.map(function(p){return '<tr><td><b>'+esc(p.name)+'</b>'+(R.some(function(r){return r.name===p.name})?'':' <span class="tag warn">명단에 없는 이름</span>')+'</td><td class="mono">'+esc(p.emp_no||'')+'</td><td>'+(p.approved?'승인':'<span class="tag warn">대기</span>')+'</td><td>'+(p.role==='admin'?'관리자':'팀원')+'</td><td>'+
    (p.id===ME.id?'<span class="mu">나</span>':(p.approved?'<button class="btn plain sm" data-p="'+p.id+'" data-a="off">승인 취소</button> ':'<button class="btn sm" data-p="'+p.id+'" data-a="on">승인</button> ')+
