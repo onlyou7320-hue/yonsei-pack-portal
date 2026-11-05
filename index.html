@@ -531,12 +531,16 @@ async function hpView(M){if(!HP.mon)HP.mon=monday(today());var days=[];for(var i
  var wn=weekName(HP.mon);
  var h='<div class="row"><div><h2>인시생산성</h2><p class="sub">인시생산성 = 그날 전체 생산량 ÷ 투입시간. 투입시간 = 출근 인원 × 8시간 + 연장. 행을 눌러 입력합니다. 실적 생산량은 생산 기록에서 자동으로 채웁니다.</p></div>'+
   '<div class="range"><button class="btn plain sm" id="hp-p">◀</button><b style="padding:0 6px">'+wn+' <span class="mu" style="font-weight:500">('+md(days[0])+' ~ '+md(days[6])+')</span></b><button class="btn plain sm" id="hp-n">▶</button><button class="btn plain sm" id="hp-x">엑셀로 내보내기</button></div></div>';
+ h+='<details class="box" id="hp-pdf"'+(HP.pdfOpen?' open':'')+'><summary style="cursor:pointer;font-weight:700">근무표 · 생산계획 PDF로 예상 채우기</summary><p class="sub" style="margin-top:6px">배포받은 PDF 두 개를 고르면 생산량, 호기 생산시간, 1팀 · 2팀 인원(평일 팀장 포함), 연장(23 · 24시 종료 라인의 오후조와 오후 조장)을 계산해 보여 줍니다. 확인한 뒤 저장하세요.</p>'+
+  '<div class="grid" style="margin-top:8px"><label>생산계획 PDF (상온제품 주간생산계획)<input type="file" id="hp-pdf-plan" accept=".pdf"></label><label>근무표 PDF (상온제품포장팀 주간근무 계획서)<input type="file" id="hp-pdf-sch" accept=".pdf"></label></div>'+
+  '<div style="margin-top:8px"><button class="btn" id="hp-pdf-go">읽기</button></div><div id="hp-pdf-msg" style="margin-top:10px"></div></details>';
  h+='<div class="box"><h3>&lt;'+wn+' 예상 인시생산성&gt;</h3>'+table('plan',P)+'</div>';
  h+='<div class="box"><h3>&lt;'+wn+' 실 인시생산성&gt;<small>'+(SRC.state==='ok'?'생산량은 생산 기록 자동 · 인원·연장은 예상을 복사해 고치세요':'생산 기록을 불러오지 못해 생산량을 직접 입력해야 합니다')+'</small></h3>'+table('act',A)+'</div>';
  h+='<p class="sub">휴무 체크 기준 인원은 명단 '+heads.total+'명에서 그날 휴무(숫자 · v · 교육)를 뺀 값에 평일 팀장 1명씩을 더한 제안값입니다. 장기 휴직 등은 직접 고쳐 주세요.</p>';
  M.innerHTML=h;
  $('#hp-p').addEventListener('click',function(){HP.mon=addD(HP.mon,-7);HP.open=null;route()});$('#hp-n').addEventListener('click',function(){HP.mon=addD(HP.mon,7);HP.open=null;route()});
  $('#hp-x').addEventListener('click',function(){hpExport(wn,days,P,A)});
+ $('#hp-pdf').addEventListener('toggle',function(){HP.pdfOpen=this.open});$('#hp-pdf-go').addEventListener('click',hpPdfFill);
  [].forEach.call(M.querySelectorAll('table.hp tr.click'),function(tr){tr.addEventListener('click',function(){HP.open=HP.open===tr.dataset.id?null:tr.dataset.id;route()})});
  var f=$('#hpForm');if(f)hpBind(f,by)}
 function hpEditor(kind,o,hd){var r=o.raw||{},ext=(r.ext||[]).slice();
@@ -594,6 +598,91 @@ async function importHp(wb){var n=0,wk=[];
   wk.push(sn)}
  if(!n)throw new Error('「N월 M주차」 시트에서 예상 · 실 표를 찾지 못했습니다');return wk.join(', ')+'에서 '+n+'일치 기록을 가져왔습니다.'}
 
+/* ================= 인시생산성: 근무표 · 생산계획 PDF로 예상 채우기 =================
+   · 생산계획 (생산기획팀 상온제품 주간생산계획 PDF): 날짜 × 멸균 호기 칸에서 생산량(개) · 포장기 번호(1~6 = A~F) · 생산 시간
+   · 근무표 (상온제품포장팀 주간근무 계획서 PDF): 요일 칸마다 시간대(07:30 · 09:00 · 16:00 · 17:30 …) · 호기 · 근무자, 「휴무」 아래 · 맨 아래 칸은 휴무자
+   · 팀은 휴무 명단의 1팀 · 2팀을 씀. 줄임 이름(승헌 · 성민 …)은 명단에서 끝이 같은 이름으로, 같은 날 이미 나온 사람은 빼고 찾음 */
+var PDFJS='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+function needPdf(){if(window.pdfjsLib)return Promise.resolve();return new Promise(function(ok,no){var s=document.createElement('script');s.src=PDFJS+'pdf.min.js';
+ s.onload=function(){try{pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS+'pdf.worker.min.js'}catch(e){}ok()};s.onerror=function(){no(new Error('PDF 읽기 도구를 불러오지 못했습니다'))};document.head.appendChild(s)})}
+/* PDF 첫 쪽의 낱말과 위치 (x · y는 왼쪽 위 기준) */
+async function pdfWords(file){await needPdf();var buf=await file.arrayBuffer();
+ var doc=await pdfjsLib.getDocument({data:buf,cMapUrl:PDFJS+'cmaps/',cMapPacked:true}).promise,pg=await doc.getPage(1),vp=pg.getViewport({scale:1}),tc=await pg.getTextContent(),out=[];
+ /* 글자 덩어리가 잘게 나뉘어 오므로(「2(」「월」「)」), 덩어리마다 낱말로 나눈 뒤 공백 없이 바로 붙어 있는 낱말끼리 이어 붙임 */
+ var toks=[];tc.items.forEach(function(it){var s=it.str||'';if(!s.trim())return;var p=vp.convertToViewportPoint(it.transform[4],it.transform[5]),w=it.width||0,n=s.length,re=/\S+/g,m;
+  while((m=re.exec(s))){toks.push({t:m[0],x:p[0]+(n?w*(m.index/n):0),x1:p[0]+(n?w*((m.index+m[0].length)/n):0),y:p[1],head:m.index===0,tail:m.index+m[0].length===n})}});
+ toks.sort(function(a,b){return Math.abs(a.y-b.y)<1.5?a.x-b.x:a.y-b.y});
+ toks.forEach(function(k){var q=out[out.length-1];if(q&&q.tail&&k.head&&Math.abs(q.y-k.y)<1.5&&k.x-q.x1<1.5&&k.x-q.x1>-2){q.t+=k.t;q.x1=k.x1;q.tail=k.tail}else out.push(k)});
+ return out}
+function colOf(cx,x){for(var i=0;i<cx.length;i++){var lo=i?(cx[i-1]+cx[i])/2:-1e9,hi=i+1<cx.length?(cx[i]+cx[i+1])/2:1e9;if(x>=lo&&x<hi)return i}return -1}
+function rowsSort(a){return a.slice().sort(function(p,q){return Math.round(p.y/4)-Math.round(q.y/4)||p.x-q.x})}
+/* 생산계획 */
+function parsePlan(W){var hs=W.filter(function(w){return /^멸균\d호기/.test(w.t)||w.t==='원액생산'}).sort(function(a,b){return a.x-b.x});
+ if(hs.length<3)throw new Error('생산계획 PDF에서 「멸균1호기」 같은 머리글을 찾지 못했습니다');
+ var cx=hs.map(function(w){return (w.x+w.x1)/2}),last=hs.length-(hs[hs.length-1].t==='원액생산'?1:0);
+ var ds=W.filter(function(w){return /^\d{1,2}\/\d{1,2}$/.test(w.t)&&w.x<cx[0]-20}).sort(function(a,b){return a.y-b.y});
+ if(!ds.length)throw new Error('생산계획 PDF에서 날짜(11/2 등)를 찾지 못했습니다');
+ var yr=(W.map(function(w){return (w.t.match(/^(20\d\d)-\d\d-\d\d$/)||[])[1]}).filter(Boolean)[0])||today().slice(0,4),dy=ds.map(function(w){return w.y});
+ var band=function(y){for(var i=0;i<dy.length;i++){var lo=i?(dy[i-1]+dy[i])/2:dy[0]-45,hi=i+1<dy.length?(dy[i]+dy[i+1])/2:dy[i]+45;if(y>=lo&&y<hi)return i}return -1};
+ var cells={};W.forEach(function(w){if(w.y<dy[0]-45)return;var c=colOf(cx,(w.x+w.x1)/2),b=band(w.y);if(c<0||c>=last||b<0)return;(cells[b+'|'+c]=cells[b+'|'+c]||[]).push(w)});
+ var days={};ds.forEach(function(w,i){var m=w.t.split('/'),y=+yr;if(+m[0]===1&&new Date().getMonth()===11)y++;days[i]={d:y+'-'+pad(+m[0])+'-'+pad(+m[1]),qty:0,lines:{},items:[]}});
+ Object.keys(cells).forEach(function(k){var b=+k.split('|')[0],c=+k.split('|')[1],txt=rowsSort(cells[k]).map(function(w){return w.t}).join(' '),D=days[b];
+  var q=(txt.match(/(?:^|[^\d,])(\d{1,3}(?:,\d{3})+)(?![\d,B])/g)||[]).map(function(s){return +s.replace(/[^\d]/g,'')});
+  var pk=(txt.match(/ml\)\s*([1-6])(?!\d)/g)||[]).map(function(s){return +s.slice(-1)}),tm=txt.match(/(\d{1,2}):\d{2}\s*[~∼-]\s*(\d{1,2}):\d{2}/);
+  var sum=q.reduce(function(a,b2){return a+b2},0);if(!sum)return;D.qty+=sum;
+  if(pk.length&&tm){var h='ABCDEF'[pk[0]-1],s=+tm[1],e=+tm[2];if(e<s)e+=24;var L0=D.lines[h];D.lines[h]=L0?{s:Math.min(L0.s,s),e:Math.max(L0.e,e)}:{s:s,e:e}}
+  D.items.push({ster:c+1,qty:sum,pk:pk[0]||null})});
+ return Object.keys(days).map(function(i){var D=days[i];D.text=Object.keys(D.lines).sort().map(function(h){var L1=D.lines[h];return h+' '+pad(L1.s)+'~'+pad(L1.e)}).join(' / ');D.maint=!D.qty;return D})}
+/* 근무표 */
+function parseSched(W,roster){var hd=W.filter(function(w){return /^\d{1,2}\([월화수목금토일]\)$/.test(w.t)}).sort(function(a,b){return a.x-b.x});
+ if(hd.length<7)throw new Error('근무표 PDF에서 요일 머리글(2(월) 등)을 찾지 못했습니다');
+ var cx=hd.map(function(w){return (w.x+w.x1)/2}),top=Math.max.apply(null,hd.map(function(w){return w.y}))+6;
+ var per=(W.map(function(w){return w.t}).join(' ').match(/기간\s*:?\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/)||[]);
+ var TIME=/^\d{1,2}:\d{2}$/,LINE=/^([A-F]|선물)$/;
+ var team={};roster.forEach(function(p){team[p.name]=p.grp});team[LEADERS[1]]=1;team[LEADERS[2]]=2;
+ /* 휴무 칸: 아래쪽에서 호기 · 시각 없이 5개 이상의 요일 칸에 이름이 있는 첫 줄부터 */
+ var rows={};W.forEach(function(w){if(w.y<top)return;var k=Math.round(w.y/4);(rows[k]=rows[k]||[]).push(w)});
+ var maxY=Math.max.apply(null,W.map(function(w){return w.y})),restY=null;
+ Object.keys(rows).map(Number).sort(function(a,b){return a-b}).forEach(function(k){if(restY!=null)return;var L=rows[k];if(L[0].y<top+(maxY-top)*0.6)return;
+  if(L.some(function(w){return LINE.test(w.t)||TIME.test(w.t)}))return;var cs={};L.forEach(function(w){cs[colOf(cx,w.x)]=1});if(Object.keys(cs).length>=5)restY=Math.min.apply(null,L.map(function(w){return w.y}))-2});
+ var res=[],warn=[];
+ for(var d=0;d<hd.length;d++){var Wd=rowsSort(W.filter(function(w){return w.y>=top&&colOf(cx,(w.x+w.x1)/2)===d}));
+  var slot=null,line=null,rowY=null,off=false,toks=[];
+  Wd.forEach(function(w){var t=w.t;if(restY!=null&&w.y>=restY)return;if(t==='휴무'){off=true;return}if(off)return;
+   if(TIME.test(t)){slot=t;line=null;rowY=w.y;return}if(LINE.test(t)){line=t;rowY=w.y;return}
+   if(rowY==null||Math.abs(w.y-rowY)>4){line=null;rowY=w.y}toks.push({t:t,slot:slot,line:line})});
+  /* 이름 풀기: 전체 이름 먼저, 줄임 이름은 같은 날 안 나온 사람 중에서 */
+  var used={},ppl=[];toks.forEach(function(k){if(team[k.t]!=null&&!used[k.t]){used[k.t]=1;ppl.push({n:k.t,slot:k.slot,line:k.line})}});
+  toks.forEach(function(k){if(team[k.t]!=null)return;var c=Object.keys(team).filter(function(n){return k.t.length>=2&&n.length>k.t.length&&n.slice(-k.t.length)===k.t&&!used[n]});
+   if(c.length>=1){if(c.length>1)warn.push(hd[d].t+' 「'+k.t+'」 → '+c[0]+' (후보: '+c.join(', ')+')');used[c[0]]=1;ppl.push({n:c[0],slot:k.slot,line:k.line,abbr:k.t})}
+   else warn.push(hd[d].t+' 「'+k.t+'」 명단에 없는 이름 — 빼고 셈')});
+  var dn=+((hd[d].t.match(/^(\d{1,2})/)||[])[1]);res.push({label:hd[d].t,day:dn,wd:'일월화수목금토'.indexOf(hd[d].t.slice(-2,-1)),ppl:ppl})}
+ return {days:res,warn:warn,startM:per[1]?+per[1]:null}}
+/* 두 PDF → 날짜별 예상 (엑셀 「요약」 규칙과 같음) */
+function hpFromPdf(plan,sch){var out=[],pm={};plan.forEach(function(p){pm[+p.d.slice(8,10)]=p});
+ sch.days.forEach(function(S){var P=pm[S.day];if(!P)return;var c={1:0,2:0},ext={};
+  S.ppl.forEach(function(p){var g=sch.team(p.n);if(g)c[g]++});
+  var weekday=S.wd>=1&&S.wd<=5;if(weekday){c[1]++;c[2]++}
+  var late=0,lateWhy='';
+  Object.keys(P.lines).forEach(function(h){var L2=P.lines[h],two=L2.s<=10&&L2.e>=20,add=two?(L2.e>=24?2.5:L2.e>=23?1.5:0):(L2.e>=16?2.5:L2.e>=15?1.5:0);if(!add)return;
+   if(add>late){late=add;lateWhy=h+'호기 '+L2.e+'시'}
+   S.ppl.forEach(function(p){var g=sch.team(p.n);if(p.line===h&&g&&(!two||p.slot==='16:00'||p.slot==='17:30')){var k=g+'|'+add+'|'+h;ext[k]=ext[k]||{team:g,n:0,h:add,why:h+'호기 '+L2.e+'시 종료 '+(two?'오후조':'1조'),who:[]};ext[k].n++;ext[k].who.push(p.n)}})});
+  if(late)S.ppl.forEach(function(p){var g=sch.team(p.n);if(!p.line&&g&&(p.slot==='16:00'||p.slot==='17:30')){var k=g+'|'+late+'|조장';ext[k]=ext[k]||{team:g,n:0,h:late,why:'오후 조장 (마지막 라인 '+lateWhy+')',who:[]};ext[k].n++;ext[k].who.push(p.n)}});
+  var E=Object.keys(ext).map(function(k){var e=ext[k];return {team:e.team,n:e.n,h:e.h,why:e.why+' · '+e.who.join(' ')}});
+  out.push({d:P.d,kind:'plan',qty:P.qty,t1_n:c[1],t2_n:c[2],maint:P.maint,lines:P.text||(P.maint?'전 호기 정비':''),ext:E,note:(weekday?'팀장 포함 · ':'')+'PDF로 채움'})});
+ return out}
+async function hpPdfFill(){var pf=$('#hp-pdf-plan').files[0],sf=$('#hp-pdf-sch').files[0],box=$('#hp-pdf-msg');if(!pf||!sf){box.innerHTML='<div class="notice">생산계획 · 근무표 PDF 두 개를 모두 골라 주세요.</div>';return}
+ box.innerHTML='<div class="notice info">PDF를 읽는 중…</div>';
+ try{var R=await api.roster();if(!R.length)throw new Error('휴무 명단이 비어 있어 팀을 나눌 수 없습니다. 관리 탭에서 휴무표를 먼저 가져오세요');
+  var plan=parsePlan(await pdfWords(pf)),sch=parseSched(await pdfWords(sf),R);var tm={};R.forEach(function(p){tm[p.name]=p.grp});tm[LEADERS[1]]=1;tm[LEADERS[2]]=2;sch.team=function(n){return tm[n]};
+  var rows=hpFromPdf(plan,sch);if(!rows.length)throw new Error('근무표와 생산계획의 날짜가 맞지 않습니다');HP.pdfRows=rows;
+  box.innerHTML='<div class="box" style="display:grid;gap:8px;background:var(--bg)"><b>읽은 결과 — 저장 전에 확인하세요</b><div class="scroll"><table><thead><tr><th>날짜</th><th class="n">생산량</th><th>생산계획</th><th class="n">1팀</th><th class="n">2팀</th><th>연장</th></tr></thead><tbody>'+
+   rows.map(function(r){var o=hpCalc(r);return '<tr><td>'+md(r.d)+' ('+dw(r.d)+')</td><td class="n">'+o.qty.toLocaleString()+'</td><td>'+esc(r.lines)+'</td><td class="n">'+r.t1_n+'명 · '+fh(o.h1)+'h</td><td class="n">'+r.t2_n+'명 · '+fh(o.h2)+'h</td><td style="white-space:normal;min-width:260px;font-size:12.5px">'+
+    (r.ext.length?r.ext.map(function(e){return e.team+'팀 '+e.n+'명 × '+e.h+'h — '+esc(e.why)}).join('<br>'):'<span class="mu">없음</span>')+'</td></tr>'}).join('')+'</tbody></table></div>'+
+   (sch.warn.length?'<details><summary class="mu" style="cursor:pointer;font-size:13px">이름 확인 '+sch.warn.length+'건</summary><ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px">'+sch.warn.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ul></details>':'')+
+   '<div class="row"><span class="mu" style="font-size:12.5px">저장하면 이 주의 예상 표를 위 값으로 바꿉니다.</span><button class="btn" id="hp-pdf-save">예상에 저장</button></div></div>';
+  $('#hp-pdf-save').addEventListener('click',async function(){var b=this;b.disabled=true;try{for(var i=0;i<HP.pdfRows.length;i++)await api.saveHp(HP.pdfRows[i]);HP.mon=monday(HP.pdfRows[0].d);HP.pdfOpen=false;toast('예상 '+HP.pdfRows.length+'일치를 저장했습니다');route()}catch(e){b.disabled=false;fail(e)}})}
+ catch(e){console.error(e);box.innerHTML='<div class="notice err">읽지 못했습니다: '+esc(errMsg(e))+'</div>'}}
 /* ================= 일지 작성 바로가기 ================= */
 function linksView(M){var P=(CFG.portal||'').replace(/\/?$/,'/');
  var L2=[['일지 작성 (포장팀)','통합포털 포장팀 일지함','#/journals'],['포장 공정 분석','생산작업일보 · 정지 · 불량팩 자동 분석','#/pack'],['전자결재','결재 요청 · 승인','#/approval']];
