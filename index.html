@@ -208,7 +208,8 @@ function classify(why,min){var t=String(why||'');
 var CFG=window.PACK_CFG||{};
 var DEMO=!(CFG.url&&CFG.key&&window.supabase);
 var sb=DEMO?null:window.supabase.createClient(CFG.url,CFG.key);
-var EMAIL_DOMAIN='@yonsei-pack.local';
+var EMAIL_PATTERN=CFG.emailPattern||'{emp}@yonsei-pack.local';
+function authEmail(emp){return EMAIL_PATTERN.replace('{emp}',emp)}
 var ME=null;
 var LS='pack_demo_v1';
 function L(){var o;try{o=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}if(!o)o={daily:[],stops:[],roster:[],off:[],seq:1};return o}
@@ -354,10 +355,10 @@ function authView(mode){mode=mode||'login';
   '<button class="btn">'+(mode==='login'?'로그인':'가입 신청')+'</button><div id="a-msg" class="notice err" hidden></div></form></div>'}
 function bindAuth(mode){$('#authForm').addEventListener('submit',async function(e){e.preventDefault();var emp=$('#a-emp').value.trim().toLowerCase(),pw=$('#a-pw').value,msg=$('#a-msg');msg.hidden=true;
   if(!/^[a-z0-9._-]+$/i.test(emp)){msg.textContent='사번은 영문·숫자로 입력하세요.';msg.hidden=false;return}
-  var email=emp+EMAIL_DOMAIN,r;
+  var email=authEmail(emp),r;
   try{if(mode==='join'){r=await sb.auth.signUp({email:email,password:pw,options:{data:{name:$('#a-name').value.trim(),emp_no:emp}}});if(r.error)throw r.error;if(!r.data.session)r=await sb.auth.signInWithPassword({email:email,password:pw})}
    else r=await sb.auth.signInWithPassword({email:email,password:pw});if(r.error)throw r.error;await boot()}
-  catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';msg.textContent=m;msg.hidden=false}})}
+  catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';if(/email address .* is invalid/i.test(m))m='가입용 주소 형식을 Supabase가 받지 않습니다. config.js의 emailPattern을 실제 메일 도메인으로 바꿔 주세요.';msg.textContent=m;msg.hidden=false}})}
 
 /* ================= 화면 전환 ================= */
 var TABS=['oee','off','links','admin'];
