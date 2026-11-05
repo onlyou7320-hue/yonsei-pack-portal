@@ -319,15 +319,67 @@ async function sterLoad(from,to,auto){if(DEMO){STER.rows=L().ster||[];STER.state
  var old=!STER.info||Date.now()-Date.parse(STER.info.at)>3*3600e3;
  if(auto&&old&&!STER.busy){STER.busy=true;api.sterSync(addD(today(),-14),today()).then(function(){STER.busy=false;if(location.hash==='#oee'||!location.hash)route()}).catch(function(e){STER.busy=false;STER.err=errMsg(e)})}}
 
+/* ================= 데이터: 통합포털 포장팀 일지 (읽기 전용) =================
+   생산작업일보 (두유포장팀) A~F호기 → SIP 시작(Heat sterilization) · 생산 시작 · 종료 · C.I.P · 품목별 생산량 · 일보 정지란
+   기계 정지 현황 (A~F호기) FRM-064 → 정지 시작 · 재가동 · 분 · 원인 (있으면 이것을 정지 내역으로 씀)
+   그 날 · 호기의 일지가 있으면 일지 값을 먼저 쓰고, 빈 값만 생산 기록으로 채움 */
+var LMAP={"A":{"c":"FRM-045","p":"p45","sip":[],"prep":["p45_4_0","p45_5_0"],"ps":["p45_4_27","p45_5_27"],"pe":["p45_4_33","p45_5_33","p45_6_33"],"cip":[],"stops":[],"it":[32,35],"ic":[0,3,8],"sum":"36","nm":"1_20"},"B":{"c":"FRM-023","p":"p23","sip":["p23_4_6","p23_5_6","p23_4_27","p23_5_27"],"prep":["p23_4_0","p23_5_0","p23_4_21","p23_5_21"],"ps":["p23_4_18","p23_5_18","p23_4_37","p23_5_37"],"pe":["p23_7_8","p23_8_8","p23_9_8","p23_10_8","p23_11_8"],"cip":["p23_7_11","p23_8_11","p23_9_11","p23_10_11","p23_11_11"],"stops":[["p23_7_0","p23_7_3","p23_7_16"],["p23_8_0","p23_8_3","p23_8_16"],["p23_9_0","p23_9_3","p23_9_16"],["p23_10_0","p23_10_3","p23_10_16"],["p23_11_0","p23_11_3","p23_11_16"]],"it":[32,36],"ic":[0,4,7],"sum":"37","nm":"1_0_2"},"C":{"c":"FRM-046","p":"p46","sip":["p46_4_6","p46_5_6","p46_4_27","p46_5_27"],"prep":["p46_4_0","p46_5_0","p46_4_21","p46_5_21"],"ps":["p46_4_18","p46_5_18","p46_4_37","p46_5_37"],"pe":["p46_7_8","p46_8_8","p46_9_8","p46_10_8","p46_11_8"],"cip":["p46_7_11","p46_8_11","p46_9_11","p46_10_11","p46_11_11"],"stops":[["p46_7_0","p46_7_3","p46_7_16"],["p46_8_0","p46_8_3","p46_8_16"],["p46_9_0","p46_9_3","p46_9_16"],["p46_10_0","p46_10_3","p46_10_16"],["p46_11_0","p46_11_3","p46_11_16"]],"it":[32,36],"ic":[0,4,7],"sum":"37","nm":"1_0_4"},"D":{"c":"FRM-049","p":"p49","sip":["p49_4_6","p49_5_6","p49_4_27","p49_5_27"],"prep":["p49_4_0","p49_5_0","p49_4_21","p49_5_21"],"ps":["p49_4_18","p49_5_18","p49_4_37","p49_5_37"],"pe":["p49_7_8","p49_8_8","p49_9_8","p49_10_8"],"cip":["p49_7_11","p49_8_11","p49_9_11","p49_10_11"],"stops":[["p49_7_0","p49_7_3","p49_7_16"],["p49_8_0","p49_8_3","p49_8_16"],["p49_9_0","p49_9_3","p49_9_16"],["p49_10_0","p49_10_3","p49_10_16"]],"it":[31,36],"ic":[0,4,7],"sum":null,"nm":"1_0_2"},"E":{"c":"FRM-047","p":"p47","sip":[],"prep":["p47_4_0","p47_5_0"],"ps":["p47_4_27","p47_5_27"],"pe":["p47_4_33","p47_5_33","p47_6_33"],"cip":[],"stops":[],"it":[32,35],"ic":[0,3,8],"sum":"36","nm":"1_20"},"F":{"c":"FRM-050","p":"p50","sip":["p50_3_6","p50_3_28"],"prep":["p50_3_0","p50_3_21"],"ps":["p50_3_18","p50_3_39"],"pe":["p50_5_8"],"cip":["p50_5_11"],"stops":[["p50_5_0","p50_5_3","p50_5_16"]],"it":[36,39],"ic":[0,4,7],"sum":null,"nm":"1_0_2"}};
+var PORTAL={url:CFG.portalUrl||'https://vogcnzfxntaorxnkpznl.supabase.co',key:CFG.portalKey||'sb_publishable_9GJBXcv4PgXUxwYY17gttw_PE15ILpK'};
+var pc=null;function PC(){if(!pc&&window.supabase)pc=window.supabase.createClient(PORTAL.url,PORTAL.key,{auth:{storageKey:'yum-portal-auth',persistSession:true,autoRefreshToken:true}});return pc}
+var PD={data:null,at:0,state:'idle',err:''};
+async function sha256(str){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return [].map.call(new Uint8Array(b),function(x){return x.toString(16).padStart(2,'0')}).join('')}
+async function portalPull(force){var c=PC();if(!c){PD.state='off';return}if(!force&&PD.state==='ok'&&Date.now()-PD.at<5*60e3)return;
+ var se=null;try{se=(await c.auth.getSession()).data.session}catch(e){}if(!se){PD.state='need-login';return}
+ PD.state='loading';try{var r=await c.from('app_state').select('data,updated_at').eq('id',1).maybeSingle();if(r.error)throw r.error;
+  if(!r.data||!r.data.data){PD.state='error';PD.err='통합포털 자료를 읽을 권한이 없습니다';return}PD.data=r.data.data;PD.updated=r.data.updated_at;PD.at=Date.now();PD.state='ok';PD.err=''}
+ catch(e){PD.state='error';PD.err=errMsg(e)}}
+async function portalLogin(emp,pw){var c=PC();emp=String(emp||'').trim().toLowerCase();var ap='Yp!'+(await sha256('supa::'+emp+'::'+pw)).slice(0,40),list=[];
+ if(emp.indexOf('@')>0)list.push(emp);else{try{var u=await c.from('user_index').select('email').eq('emp_no',emp).maybeSingle();if(u.data&&u.data.email)list.push(String(u.data.email).toLowerCase())}catch(e){}if(list.indexOf(emp+'@yonsei.local')<0)list.push(emp+'@yonsei.local')}
+ for(var i=0;i<list.length;i++){var r=await c.auth.signInWithPassword({email:list[i],password:ap});if(!r.error)return true;if(pw.length>=6){r=await c.auth.signInWithPassword({email:list[i],password:pw});if(!r.error)return true}}
+ return false}
+function pForm(code){return ((PD.data&&PD.data.forms)||[]).filter(function(f){return f.code===code})[0]}
+function pDate(d){return String((d.data&&d.data.pdate)||d.savedAt||d.updatedAt||d.createdAt||'').slice(0,10)}
+function pDocs(code,from,to){var f=pForm(code);if(!f)return [];return (PD.data.docs||[]).filter(function(d){if(d.formId!==f.id||!d.data||d.deleted)return false;var k=pDate(d);return k>=from&&k<=to})}
+function pv(g,k){var x=g[k];return x==null?'':String(x).trim()}
+function mergeDocs(list){var g={};list.slice().sort(function(a,b){return String(a.updatedAt||'').localeCompare(String(b.updatedAt||''))}).forEach(function(d){var G=d.data.grid||{};Object.keys(G).forEach(function(k){var v=G[k];if(v!=null&&String(v).trim()!=='')g[k]=v})});return g}
+function firstT(g,keys){for(var i=0;i<keys.length;i++){var t=tmin(pv(g,keys[i]));if(t!=null)return t}return null}
+function lastTk(g,keys){var o=null;keys.forEach(function(k){var t=tmin(pv(g,k));if(t!=null)o=t});return o}
+function lastT(x){var a=String(x||'').match(/\d{1,2}\s*:\s*\d{2}/g);return a&&a.length?tmin(a[a.length-1]):null}
+function journalDays(from,to){var out={};if(PD.state!=='ok')return out;
+ Object.keys(LMAP).forEach(function(h){var M=LMAP[h],by={};pDocs(M.c,from,to).forEach(function(d){var k=pDate(d);(by[k]=by[k]||[]).push(d)});
+  Object.keys(by).forEach(function(D){var g=mergeDocs(by[D]),P=M.p+'_',o={d:D,line:h,docs:by[D]},items=[];
+   for(var r=M.it[0];r<=M.it[1];r++){var nm=pv(g,P+r+'_'+M.ic[0]),ea=num(pv(g,P+r+'_'+M.ic[2]));if(nm||ea!=null)items.push({n:nm,ea:ea})}
+   o.qty=M.sum?num(pv(g,P+M.sum+'_'+M.ic[2])):null;if(o.qty==null){var t=0,n=0;items.forEach(function(x){if(x.ea!=null){t+=x.ea;n++}});o.qty=n?t:null}
+   o.item=pv(g,P+M.nm)||items.map(function(x){return x.n}).filter(Boolean).join(', ');
+   o.sip=firstT(g,M.sip);if(o.sip==null)o.sip=firstT(g,M.prep);o.ps=firstT(g,M.ps);o.pe=lastTk(g,M.pe);
+   var cr=M.cip.map(function(k){return pv(g,k)}).filter(function(x){return /\d:\d\d/.test(x)});o.cipRaw=cr.join(' / ');o.cip=cr.length?lastT(cr[cr.length-1]):null;
+   o.jstops=M.stops.map(function(t){var a=tmin(pv(g,t[0])),b=t[1]?tmin(pv(g,t[1])):null,why=t[2]?pv(g,t[2]):'';return (a==null&&b==null&&!why)?null:{a:a,b:b,m:span(a,b),why:why,src:'일보 정지란'}}).filter(Boolean);
+   out[D+'|'+h]=o})});
+ var sh={};pDocs('FRM-064',from,to).forEach(function(d){var g=d.data.grid||{},ho=pv(g,'p64_ho').replace(/호기/,'').trim().toUpperCase(),kd=pv(g,'p64_kind');if(!ho||/선물/.test(kd))return;
+  var k=pDate(d)+'|'+ho;for(var y=4;y<=30;y++){var a=tmin(pv(g,'p64_'+y+'_2')),b=tmin(pv(g,'p64_'+y+'_3')),m=num(pv(g,'p64_'+y+'_4')),why=pv(g,'p64_'+y+'_5');
+   if(a==null&&b==null&&m==null&&!why)continue;if(m==null&&a!=null&&b!=null)m=span(a,b);(sh[k]=sh[k]||[]).push({a:a,b:b,m:m,why:why,src:'기계 정지 현황'})}});
+ Object.keys(sh).forEach(function(k){if(!out[k]){var p=k.split('|');out[k]={d:p[0],line:p[1],docs:[],jstops:[]}}});
+ Object.keys(out).forEach(function(k){var o=out[k];o.stops=sh[k]&&sh[k].length?sh[k]:o.jstops;o.stopSrc=sh[k]&&sh[k].length?'기계 정지 현황':'생산작업일보 정지란'});
+ return out}
+/* 생산 기록(J)에 일지(N)를 덮어 합침 */
+function mergeSources(J,N){Object.keys(N).forEach(function(k){var n=N[k],j=J[k];
+  if(!j){if(n.ps==null&&n.qty==null)return;j=J[k]={d:n.d,line:n.line,runs:[],stops:[],rate:null,plan:null,ideal:null}}
+  j.jn=n;var used=false;
+  if(n.ps!=null){j.ps=n.ps;used=true}if(n.pe!=null){j.pe=n.pe;used=true}if(n.qty!=null){j.qty=n.qty;used=true}if(n.item&&!j.item)j.item=n.item;
+  if(n.stops&&n.stops.length){j.stops=n.stops.map(function(x){return {a:x.a,b:x.b,m:x.m,why:x.why,src:x.src}});used=true}
+  if(n.sip!=null)j.sipJ=n.sip;if(n.cip!=null)j.cipJ=n.cip;
+  if(used){j.ideal=null;j.prodSpanMs=(j.ps!=null&&j.pe!=null)?span(j.ps,j.pe):j.prodSpanMs}j.tag=j.runs.length?'일지+생산 기록':'일지'});
+ return J}
+
 /* ================= OEE 계산 (OEE 일일 기록 양식과 같은 식) ================= */
-function build(from,to,daily,stops){var J=SRC.state==='ok'?srcDays(from,to):{},sup={},man={};
+function build(from,to,daily,stops){var J=mergeSources(SRC.state==='ok'?srcDays(from,to):{},journalDays(from,to)),sup={},man={};
  daily.forEach(function(r){sup[r.d+'|'+r.line]=r});stops.forEach(function(s){var k=s.d+'|'+s.line;(man[k]=man[k]||[]).push(s)});
  var keys={};Object.keys(J).forEach(function(k){keys[k]=1});daily.forEach(function(r){if(r.qty!=null||r.ps)keys[r.d+'|'+r.line]=1});
  return Object.keys(keys).map(function(k){var j=J[k],s=sup[k]||{},p=k.split('|'),o={d:p[0],line:p[1],sup:s,j:j||null};
   var pick=function(f,jv){return s[f]!=null&&s[f]!==''?s[f]:jv};
-  if(j){o.src='생산 기록';o.item=pick('item',j.item);o.ps=s.ps?tmin(s.ps):j.ps;o.pe=s.pe?tmin(s.pe):j.pe;o.qty=s.qty!=null?num(s.qty):j.qty;
-   o.sipEst=!s.sip;o.sip=s.sip?tmin(s.sip):(o.ps-SIP_EST[o.line]+1440)%1440;
-   o.cipEst=!s.cip;o.cip=s.cip?tmin(s.cip):(o.pe+CIP_EST[o.line])%1440;
+  if(j){o.src=j.tag||'생산 기록';o.item=pick('item',j.item);o.ps=s.ps?tmin(s.ps):j.ps;o.pe=s.pe?tmin(s.pe):j.pe;o.qty=s.qty!=null?num(s.qty):j.qty;
+   o.sipEst=!s.sip&&j.sipJ==null;o.sip=s.sip?tmin(s.sip):(j.sipJ!=null?j.sipJ:(o.ps-SIP_EST[o.line]+1440)%1440);
+   o.cipEst=!s.cip&&j.cipJ==null;o.cip=s.cip?tmin(s.cip):(j.cipJ!=null?j.cipJ:(o.pe+CIP_EST[o.line])%1440);
    var ov=s.codes||{};o.stops=j.stops.map(function(x){var key=hm(x.a)+'|'+x.src,auto=x.code||classify(x.why,x.m),v=ov[key]||{},code=v.code||auto;
     return {key:key,a:x.a,b:x.b,min:x.m,why:x.why,auto:auto,code:code,brk:v.brk||(code===2?'Y':'N'),src:x.src}});
    o.rate=j.rate;o.planJ=j.plan;o.idealJ=j.ideal;
@@ -392,13 +444,23 @@ function srcBox(){var link='<a href="'+esc(FS.site)+'" target="_blank" rel="noop
 function sterBox(){if(DEMO)return '';var i=STER.info;
  if(STER.state==='error')return '<div class="notice err">멸균팀 자료를 읽지 못했습니다: '+esc(STER.err)+'</div>';
  return '<div class="srcbar"><span class="dot'+(i?' ok':'')+'"></span><span>멸균팀 업무일지 연계 · '+(i?'멸균기 생산량 '+STER.rows.length+'건 <span class="mu">('+esc(String(i.at||'').slice(5,16).replace('T',' '))+' 받음)</span>':'아직 받은 자료 없음')+(STER.busy?' <span class="mu">· 새로 받는 중…</span>':'')+(STER.err&&!STER.busy?' <span class="mu">· 최근 받기 실패: '+esc(STER.err)+'</span>':'')+'</span></div>'}
-function bindSrc(){var r=$('#sRefresh');if(r)r.addEventListener('click',async function(){await srcPull(true);route()})}
+function portalBox(){if(!PC())return '';
+ if(PD.state==='ok')return '<div class="srcbar"><span class="dot ok"></span><span>통합포털 포장팀 일지 연결 <span class="mu">('+esc(String(PD.updated||'').slice(5,16).replace('T',' '))+' 기준)</span></span><button class="link" id="pRefresh">새로고침</button><button class="link" id="pOut">연결 끊기</button></div>';
+ if(PD.state==='loading')return '<div class="srcbar"><span class="dot"></span>통합포털 일지 불러오는 중…</div>';
+ return '<form class="box" id="pForm" style="display:grid;gap:8px"><h3 style="margin:0">통합포털 일지 연결<small>생산작업일보 · 기계 정지 현황의 SIP · 생산 시각 · 생산량 · 정지를 OEE에 씁니다</small></h3>'+(PD.err?'<div class="notice err">'+esc(PD.err)+'</div>':'')+
+  '<p class="sub" style="margin:0">통합포털에서 쓰는 사번과 비밀번호를 넣어 주세요. 읽기만 하고 통합포털 일지는 바꾸지 않습니다. 이 기기에서 한 번 연결하면 유지됩니다.</p>'+
+  '<div class="range"><label>통합포털 사번<input id="pe-emp" required autocomplete="off"></label><label>비밀번호<input id="pe-pw" type="password" required autocomplete="off"></label><button class="btn">연결</button></div></form>'}
+function bindPortal(){var f=$('#pForm');if(f)f.addEventListener('submit',async function(e){e.preventDefault();var b=f.querySelector('button');b.disabled=true;b.textContent='연결 중…';var ok=false;
+  try{ok=await portalLogin($('#pe-emp').value,$('#pe-pw').value)}catch(x){}if(!ok){PD.err='통합포털 사번 또는 비밀번호가 맞지 않습니다.';PD.state='need-login';route();return}PD.err='';await portalPull(true);route()});
+ var r=$('#pRefresh');if(r)r.addEventListener('click',async function(){await portalPull(true);route()});
+ var o=$('#pOut');if(o)o.addEventListener('click',async function(){try{await PC().auth.signOut()}catch(x){}PD={data:null,at:0,state:'need-login',err:''};route()})}
+function bindSrc(){bindPortal();var r=$('#sRefresh');if(r)r.addEventListener('click',async function(){await srcPull(true);route()})}
 async function oeeView(M){if(!RG.to){RG.to=today();RG.from=RG.to.slice(0,8)+'01'}
- await srcPull(false);await sterLoad(RG.from,RG.to,true);
+ await Promise.all([srcPull(false),portalPull(false)]);await sterLoad(RG.from,RG.to,true);
  var a=await Promise.all([api.daily(RG.from,RG.to),api.stops(RG.from,RG.to)]);var rows=build(RG.from,RG.to,a[0],a[1]);
  var lines=LINES.filter(function(h){return rows.some(function(r){return r.line===h})});
  var h='<div class="row"><div><h2>포장기 OEE</h2><p class="sub">생산 기록(시작 · 종료 · 생산량 · 정지)에서 자동으로 계산합니다. 기록에 없는 용량 · 멸균기 적산량 · SIP 시작 · CIP 종료만 행을 눌러 채워 주세요.</p></div>'+
-  '<div class="range"><label>시작일<input type="date" id="rf" value="'+RG.from+'"></label><label>종료일<input type="date" id="rt" value="'+RG.to+'"></label><button class="btn plain sm" data-q="7">최근 7일</button><button class="btn plain sm" data-q="0">이번 달</button></div></div>'+srcBox()+sterBox();
+  '<div class="range"><label>시작일<input type="date" id="rf" value="'+RG.from+'"></label><label>종료일<input type="date" id="rt" value="'+RG.to+'"></label><button class="btn plain sm" data-q="7">최근 7일</button><button class="btn plain sm" data-q="0">이번 달</button></div></div>'+srcBox()+portalBox()+sterBox();
  if(!rows.length){M.innerHTML=h+'<div class="empty">이 기간에 계산할 기록이 없습니다.'+(SRC.state==='ok'?'<br>생산 기록 사이트에서 생산을 종료하면 여기에 나타납니다.':'')+'</div>';bindRange();bindSrc();return}
  h+='<div class="cards">'+lines.map(function(x){var a=agg(rows.filter(function(r){return r.line===x})),main=a.O!=null?a.O:a.AP;
   return '<div class="card"><div class="ct"><b>'+x+'호기</b><span>'+esc(MAKER[x])+' · CAPA '+(capOf(x,RG.to)||0).toLocaleString()+'/h</span></div>'+
@@ -426,7 +488,8 @@ function detail(r){var s=r.sup||{},j=r.j;
    return '<tr><td class="mono">'+hm(x.a)+'</td><td class="mono">'+hm(x.b)+'</td><td class="n">'+(x.min==null?'-':x.min)+'</td><td style="white-space:normal;min-width:180px">'+esc(x.why||'')+'</td>'+
     '<td><select data-i="'+i+'" data-k="code">'+CODES.map(function(c,k){return '<option value="'+(k+1)+'"'+(x.code===k+1?' selected':'')+'>'+(k+1)+'. '+c+(x.auto===k+1&&r.src==='생산 기록'?' (자동)':'')+'</option>'}).join('')+'</select></td>'+
     '<td><select data-i="'+i+'" data-k="brk"><option'+(x.brk!=='Y'?' selected':'')+'>N</option><option'+(x.brk==='Y'?' selected':'')+'>Y</option></select></td></tr>'}).join('')+'</tbody></table></div>':'<div class="mu">정지 기록이 없습니다.</div>';
- if(j)h+='<p class="sub">생산 기록에서 읽은 값 — '+j.runs.map(function(x){return esc(x.item||'')+' '+hm(mod(x.start))+'~'+hm(mod(x.end))+' · '+(+x.produced||0).toLocaleString()+'개 (계획 '+(+x.plan||0).toLocaleString()+', 속도 '+(+x.rate||0).toLocaleString()+'/h)'}).join(' / ')+' · <a href="'+esc(FS.site)+'" target="_blank" rel="noopener">생산 기록 사이트에서 고치기 ↗</a></p>';
+ if(j&&j.runs&&j.runs.length)h+='<p class="sub">생산 기록에서 읽은 값 — '+j.runs.map(function(x){return esc(x.item||'')+' '+hm(mod(x.start))+'~'+hm(mod(x.end))+' · '+(+x.produced||0).toLocaleString()+'개 (계획 '+(+x.plan||0).toLocaleString()+', 속도 '+(+x.rate||0).toLocaleString()+'/h)'}).join(' / ')+' · <a href="'+esc(FS.site)+'" target="_blank" rel="noopener">생산 기록 사이트 ↗</a></p>';
+ if(j&&j.jn){var n=j.jn;h+='<p class="sub">통합포털 일지에서 읽은 값 — SIP '+(hm(n.sip)||'-')+' · 생산 '+(hm(n.ps)||'-')+'~'+(hm(n.pe)||'-')+' · C.I.P 칸 '+esc(n.cipRaw||'-')+' · 생산량 '+(n.qty==null?'-':n.qty.toLocaleString()+'개')+' · 정지 '+esc(n.stopSrc)+' '+(n.stops||[]).length+'건'+(CFG.portal?' · <a href="'+esc((CFG.portal||'').replace(/\/?$/,'/'))+'#/docs" target="_blank" rel="noopener">통합포털 문서관리 ↗</a>':'')+'</p>'}
  h+='</div><form id="supForm"><h4>보완 입력<small>생산 기록에 없는 값만</small></h4><div class="grid">'+
   inp('ml','용량 (ml)',s.ml,'예: 190','number')+'<label>연결 멸균호기<select id="x-ster"><option value="">자동 (품목으로 찾기)</option>'+[1,2,3,4,5].map(function(u){return '<option value="'+u+'"'+(String(s.ster||'')===String(u)?' selected':'')+'>'+u+'호기</option>'}).join('')+'</select></label>'+
   inp('ster_l','멸균기 적산량 (L)',s.ster_l,r.sterSrc&&s.ster_l==null?'자동 '+Math.round(r.sterL).toLocaleString()+' ('+r.sterSrc+')':'멸균팀 자료가 없으면 입력','number')+inp('sip','SIP 시작',s.sip,r.sipEst?'추정 '+hm(r.sip):'','time')+inp('cip','CIP 종료',s.cip,r.cipEst?'추정 '+hm(r.cip):'','time')+'</div>'+
