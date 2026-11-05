@@ -137,6 +137,7 @@ button.cell{cursor:pointer}button.cell:hover{outline:1px solid var(--accent)}
 .chips span{display:inline-flex;align-items:center;gap:2px;font-size:13px;background:var(--sunken);border-radius:999px;padding:3px 4px 3px 10px}
 .tm{display:inline-block;font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-left:4px;vertical-align:1px}.tm.t1{background:var(--sunken);color:var(--muted)}.tm.t2{background:var(--accent-soft);color:var(--accent)}
 .chips button.tgl{color:var(--fg);font-size:13px;padding:0 2px}.chips button.tgl .tm{margin:0 2px 0 0}
+table.hp th.c{text-align:center;border-bottom:1px solid var(--line2)}table.hp tr.sum td{font-weight:700;background:var(--sunken)}table.hp sup{font-size:10px;color:var(--accent);margin-left:3px}table.hp tr.empty-row td{color:var(--muted)}
 .chips button{border:0;background:none;cursor:pointer;color:var(--muted);font-size:14px;padding:2px 6px}
 .srcbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 14px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--warn);flex:0 0 auto}.dot.ok{background:var(--good)}
@@ -157,6 +158,7 @@ sup{color:var(--warn);font-weight:700}
     <nav id="nav" aria-label="메뉴" hidden>
       <a href="#oee" data-t="oee">OEE 현황</a>
       <a href="#off" data-t="off">휴무 체크</a>
+      <a href="#hp" data-t="hp">인시생산성</a>
       <a href="#links" data-t="links">일지 작성</a>
       <a href="#admin" data-t="admin" id="navAdmin" hidden>관리</a>
     </nav>
@@ -241,6 +243,11 @@ var api={
   if(DEMO){var o=L();rows.forEach(function(r){o.off=o.off.filter(function(x){return !(x.ym===r.ym&&x.name===r.name&&x.day===r.day)})});o.off=o.off.concat(put);LW(o);return Promise.resolve()}
   var p=Promise.resolve();if(put.length)p=p.then(function(){return sb.from('off_cells').upsert(put,{onConflict:'ym,name,day'}).then(chk)});
   del.forEach(function(r){p=p.then(function(){return sb.from('off_cells').delete().eq('ym',r.ym).eq('name',r.name).eq('day',r.day).then(chk)})});return p},
+ hp:function(from,to){if(DEMO)return Promise.resolve((L().hp||[]).filter(function(x){return x.d>=from&&x.d<=to}));return sb.from('hp_days').select('*').gte('d',from).lte('d',to).then(chk)},
+ saveHp:function(row){row=Object.assign({},row);row.updated_by=ME.name;row.updated_at=new Date().toISOString();
+  if(DEMO){var o=L();o.hp=(o.hp||[]).filter(function(x){return !(x.d===row.d&&x.kind===row.kind)});o.hp.push(row);LW(o);return Promise.resolve()}
+  return sb.from('hp_days').upsert(row,{onConflict:'d,kind'}).then(chk)},
+ delHp:function(d,kind){if(DEMO){var o=L();o.hp=(o.hp||[]).filter(function(x){return !(x.d===d&&x.kind===kind)});LW(o);return Promise.resolve()}return sb.from('hp_days').delete().eq('d',d).eq('kind',kind).then(chk)},
  sterJournal:function(from,to){if(DEMO)return Promise.resolve(L().ster||[]);return sb.from('ster_journal').select('d,unit,idx,rec').gte('d',from).lte('d',to).range(0,9999).then(chk)},
  syncInfo:function(){if(DEMO)return Promise.resolve(null);return sb.from('sync_log').select('*').eq('k','ster').maybeSingle().then(chk)},
  sterSync:function(from,to){if(DEMO)return Promise.reject(new Error('데모 모드에서는 받을 수 없습니다'));
@@ -363,10 +370,10 @@ function bindAuth(mode){$('#authForm').addEventListener('submit',async function(
   catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';if(/email address .* is invalid/i.test(m))m='가입용 주소 형식을 Supabase가 받지 않습니다. config.js의 emailPattern을 실제 메일 도메인으로 바꿔 주세요.';msg.textContent=m;msg.hidden=false}})}
 
 /* ================= 화면 전환 ================= */
-var TABS=['oee','off','links','admin'];
+var TABS=['oee','off','hp','links','admin'];
 async function route(){var t=location.hash.slice(1)||'oee';if(TABS.indexOf(t)<0)t='oee';if(t==='admin'&&ME.role!=='admin')t='oee';
  [].forEach.call(document.querySelectorAll('nav a'),function(a){a.classList.toggle('on',a.dataset.t===t)});
- var M=$('#main');try{if(t==='oee')await oeeView(M);else if(t==='off')await offView(M);else if(t==='links')linksView(M);else await adminView(M)}
+ var M=$('#main');try{if(t==='oee')await oeeView(M);else if(t==='off')await offView(M);else if(t==='hp')await hpView(M);else if(t==='links')linksView(M);else await adminView(M)}
  catch(e){console.error(e);M.innerHTML='<div class="notice err">불러오지 못했습니다: '+esc(errMsg(e))+'</div>'}}
 window.addEventListener('hashchange',function(){if(ME&&ME.approved)route()});
 async function boot(){await loadMe();var who=$('#who'),nav=$('#nav'),M=$('#main');
@@ -480,6 +487,113 @@ function setCell(n,d,v){if(!canEdit(n))return;var cur=OF.cells[n]=OF.cells[n]||{
  api.setOff([{ym:OF.ym,name:n,day:d,val:v}]).catch(function(e){if(prev)cur[d]=prev;else delete cur[d];paintOff();fail(e)})}
 document.addEventListener('click',function(e){if(OF.pick&&!e.target.closest('.menu')){OF.pick=null;if(location.hash==='#off')paintOff()}});
 
+/* ================= 인시생산성 (예상 · 실) =================
+   기준 (상온포장팀 예상 인시생산성 — 계산 기준 문서):
+   · 인원: 휴무 칸에 없는 사람 모두 + 팀장(유강선 1팀 · 임채범 2팀) 월~금 1명씩
+   · 투입시간: 1인 8시간 + 연장 (2교대 라인 23시 종료 +1.5h · 24시 +2.5h / 1조 라인 15시 +1.5h · 16시 +2.5h, 오후 조장도 마지막 라인 기준 같은 시간)
+   · 인시생산성 = 그날 전체 생산량 ÷ 팀 투입시간 (1팀 · 2팀 · 합계 각각), 정비일은 0
+   · 주차 이름: 그 주 목요일이 속한 달의 몇 번째 주 (10/26~11/1 = 10월 5주차, 11/2~11/8 = 11월 1주차) */
+var HP={mon:null,open:null,kind:'plan'};
+var LEADERS={1:'유강선',2:'임채범'};
+function monday(s){var d=new Date(s+'T00:00:00'),w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function weekName(mon){var th=addD(mon,3);return (+th.slice(5,7))+'월 '+Math.ceil(+th.slice(8,10)/7)+'주차'}
+function extH(e){return (e||[]).reduce(function(t,x){return t+(+x.n||0)*(+x.h||0)},0)}
+function extOf(e,team){return (e||[]).filter(function(x){return +x.team===team})}
+function hpCalc(r){var o={d:r.d,qty:num(r.qty)||0,maint:!!r.maint,n1:+r.t1_n||0,n2:+r.t2_n||0};
+ o.h1=o.n1*8+extH(extOf(r.ext,1));o.h2=o.n2*8+extH(extOf(r.ext,2));o.h=o.h1+o.h2;o.n=o.n1+o.n2;
+ var z=o.maint||!o.qty;o.p1=z||!o.h1?0:o.qty/o.h1;o.p2=z||!o.h2?0:o.qty/o.h2;o.p=z||!o.h?0:o.qty/o.h;return o}
+function hpSum(list){var s={qty:0,h1:0,h2:0,h:0,n:0,n1:0,n2:0};list.forEach(function(o){s.qty+=o.qty;s.h1+=o.h1;s.h2+=o.h2;s.h+=o.h;s.n+=o.n;s.n1+=o.n1;s.n2+=o.n2});
+ s.p1=s.h1?s.qty/s.h1:0;s.p2=s.h2?s.qty/s.h2:0;s.p=s.h?s.qty/s.h:0;return s}
+/* 휴무 체크 기준 출근 인원 (팀장 포함) */
+async function hpHeads(days){var R=await api.roster(),yms={},out={};days.forEach(function(d){yms[d.slice(0,7)]=1});
+ var cells={};for(var ym in yms){(await api.off(ym)).forEach(function(c){cells[c.ym+'|'+c.name+'|'+c.day]=c.val})}
+ days.forEach(function(d){var o={1:0,2:0,off1:0,off2:0},ym=d.slice(0,7),dd=+d.slice(8,10),wd=new Date(d+'T00:00:00').getDay();
+  R.forEach(function(p){var v=cells[ym+'|'+p.name+'|'+dd]||'';if(isOff(v)||v==='교')o['off'+p.grp]++;else o[p.grp]++});
+  if(wd>=1&&wd<=5){o[1]++;o[2]++;o.lead=1}out[d]=o});return {by:out,total:R.length}}
+/* 생산 기록의 그날 생산량 (시작일 기준, A~F호기 합) */
+function actQty(d){if(SRC.state!=='ok')return null;var s=0,n=0;SRC.runs.forEach(function(r){if(dkey(r.start)===d){s+=+r.produced||0;n++}});return n?s:null}
+var f1=function(x){return x==null||!isFinite(x)?'-':(Math.round(x*10)/10).toLocaleString('ko-KR',{minimumFractionDigits:1,maximumFractionDigits:1})};
+var fh=function(x){return (Math.round(x*10)/10).toLocaleString('ko-KR')};
+async function hpView(M){if(!HP.mon)HP.mon=monday(today());var days=[];for(var i=0;i<7;i++)days.push(addD(HP.mon,i));
+ await srcPull(false);var rows=await api.hp(days[0],days[6]),by={plan:{},act:{}};rows.forEach(function(r){(by[r.kind]||{})[r.d]=r});
+ var heads=await hpHeads(days);
+ var calc=function(kind){return days.map(function(d){var r=Object.assign({d:d},by[kind][d]||{});if(kind==='act'&&(r.qty==null||r.qty==='')){var q=actQty(d);if(q!=null){r.qty=q;r._auto=1}}var o=hpCalc(r);o.raw=r;o.has=!!by[kind][d]||!!r._auto;return o})};
+ var P=calc('plan'),A=calc('act');
+ var table=function(kind,list){var s=hpSum(list.filter(function(o){return o.has}));
+  return '<div class="scroll"><table class="hp"><thead><tr><th rowspan="2">날짜</th><th rowspan="2" class="n">생산량(EA)</th><th colspan="2" class="c">상온제품 포장1팀</th><th colspan="2" class="c">상온제품 포장2팀</th><th colspan="2" class="c">포장팀 합계</th><th colspan="3" class="c">투입인원</th></tr>'+
+   '<tr><th class="n">투입시간(h)</th><th class="n">인시생산성</th><th class="n">투입시간(h)</th><th class="n">인시생산성</th><th class="n">투입시간(h)</th><th class="n">인시생산성</th><th class="n">1·2팀</th><th class="n">1팀</th><th class="n">2팀</th></tr></thead><tbody>'+
+   list.map(function(o){var id=kind+'|'+o.d,on=HP.open===id,dt=md(o.d)+' ('+dw(o.d)+')';
+    if(!o.has)return '<tr class="click empty-row" data-id="'+id+'"><td>'+dt+'</td><td colspan="10" class="mu">'+(kind==='plan'?'눌러서 예상 입력':'눌러서 실적 입력')+'</td></tr>'+(on?'<tr class="det"><td colspan="11">'+hpEditor(kind,o,heads.by[o.d])+'</td></tr>':'');
+    return '<tr class="click'+(on?' on':'')+'" data-id="'+id+'"><td>'+dt+(o.maint?' <span class="tag">정비</span>':'')+'</td><td class="n">'+o.qty.toLocaleString()+(o.raw._auto?'<sup title="생산 기록에서 자동">자동</sup>':'')+'</td>'+
+     '<td class="n">'+fh(o.h1)+'</td><td class="n">'+f1(o.p1)+'</td><td class="n">'+fh(o.h2)+'</td><td class="n">'+f1(o.p2)+'</td><td class="n">'+fh(o.h)+'</td><td class="n"><b>'+f1(o.p)+'</b></td><td class="n">'+o.n+'</td><td class="n">'+o.n1+'</td><td class="n">'+o.n2+'</td></tr>'+
+     (on?'<tr class="det"><td colspan="11">'+hpEditor(kind,o,heads.by[o.d])+'</td></tr>':'')}).join('')+
+   '<tr class="sum"><td>주 합계</td><td class="n">'+s.qty.toLocaleString()+'</td><td class="n">'+fh(s.h1)+'</td><td class="n">'+f1(s.p1)+'</td><td class="n">'+fh(s.h2)+'</td><td class="n">'+f1(s.p2)+'</td><td class="n">'+fh(s.h)+'</td><td class="n"><b>'+f1(s.p)+'</b></td><td class="n">'+s.n+'</td><td class="n">'+s.n1+'</td><td class="n">'+s.n2+'</td></tr></tbody></table></div>'};
+ var wn=weekName(HP.mon);
+ var h='<div class="row"><div><h2>인시생산성</h2><p class="sub">인시생산성 = 그날 전체 생산량 ÷ 투입시간. 투입시간 = 출근 인원 × 8시간 + 연장. 행을 눌러 입력합니다. 실적 생산량은 생산 기록에서 자동으로 채웁니다.</p></div>'+
+  '<div class="range"><button class="btn plain sm" id="hp-p">◀</button><b style="padding:0 6px">'+wn+' <span class="mu" style="font-weight:500">('+md(days[0])+' ~ '+md(days[6])+')</span></b><button class="btn plain sm" id="hp-n">▶</button><button class="btn plain sm" id="hp-x">엑셀로 내보내기</button></div></div>';
+ h+='<div class="box"><h3>&lt;'+wn+' 예상 인시생산성&gt;</h3>'+table('plan',P)+'</div>';
+ h+='<div class="box"><h3>&lt;'+wn+' 실 인시생산성&gt;<small>'+(SRC.state==='ok'?'생산량은 생산 기록 자동 · 인원·연장은 예상을 복사해 고치세요':'생산 기록을 불러오지 못해 생산량을 직접 입력해야 합니다')+'</small></h3>'+table('act',A)+'</div>';
+ h+='<p class="sub">휴무 체크 기준 인원은 명단 '+heads.total+'명에서 그날 휴무(숫자 · v · 교육)를 뺀 값에 평일 팀장 1명씩을 더한 제안값입니다. 장기 휴직 등은 직접 고쳐 주세요.</p>';
+ M.innerHTML=h;
+ $('#hp-p').addEventListener('click',function(){HP.mon=addD(HP.mon,-7);HP.open=null;route()});$('#hp-n').addEventListener('click',function(){HP.mon=addD(HP.mon,7);HP.open=null;route()});
+ $('#hp-x').addEventListener('click',function(){hpExport(wn,days,P,A)});
+ [].forEach.call(M.querySelectorAll('table.hp tr.click'),function(tr){tr.addEventListener('click',function(){HP.open=HP.open===tr.dataset.id?null:tr.dataset.id;route()})});
+ var f=$('#hpForm');if(f)hpBind(f,by)}
+function hpEditor(kind,o,hd){var r=o.raw||{},ext=(r.ext||[]).slice();
+ var h='<form id="hpForm" data-kind="'+kind+'" data-d="'+o.d+'" style="display:grid;gap:12px"><div class="grid">'+
+  '<label>생산량 (EA)<input id="hp-qty" type="number" inputmode="numeric" value="'+esc(r._auto?'':(r.qty==null?'':r.qty))+'" placeholder="'+(r._auto?'생산 기록 자동 '+(+r.qty).toLocaleString():(kind==='plan'?'생산계획표 합계':''))+'"></label>'+
+  '<label>1팀 출근 인원<input id="hp-n1" type="number" inputmode="numeric" value="'+esc(r.t1_n==null?'':r.t1_n)+'" placeholder="제안 '+(hd?hd[1]:'')+'"></label>'+
+  '<label>2팀 출근 인원<input id="hp-n2" type="number" inputmode="numeric" value="'+esc(r.t2_n==null?'':r.t2_n)+'" placeholder="제안 '+(hd?hd[2]:'')+'"></label>'+
+  '<label style="align-self:end;display:flex;gap:6px;align-items:center"><input type="checkbox" id="hp-maint" style="width:auto"'+(r.maint?' checked':'')+'>정비일 (생산 없음)</label></div>'+
+  (hd?'<div class="mu" style="font-size:12.5px">휴무 체크 기준: 1팀 '+hd[1]+'명 · 2팀 '+hd[2]+'명'+(hd.lead?' (팀장 포함)':'')+' · 휴무 1팀 '+hd.off1+' · 2팀 '+hd.off2+' <button type="button" class="link" id="hp-use">이 인원 넣기</button>'+(kind==='act'?' <button type="button" class="link" id="hp-copy">예상에서 인원·연장 복사</button>':'')+'</div>':'')+
+  '<label>생산계획 (호기 생산시간)<input id="hp-lines" value="'+esc(r.lines||'')+'" placeholder="예: A 10~24 / B 09~22 / D 09~21 / F 09~23"></label>'+
+  '<div id="hp-sug" class="mu" style="font-size:12.5px"></div>'+
+  '<div><h4 style="margin:0 0 6px;font-size:13.5px">연장<small>인원 × 시간 · 오후 조장 포함</small></h4><table class="st" id="hp-ext"><thead><tr><th>팀</th><th class="n">인원</th><th class="n">1인 시간</th><th>내용</th><th></th></tr></thead><tbody>'+
+  ext.map(function(x,i){return extRow(x,i)}).join('')+'</tbody></table>'+
+  '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button type="button" class="btn plain sm" data-add="1|1.5">+ 1팀 1.5h</button><button type="button" class="btn plain sm" data-add="1|2.5">+ 1팀 2.5h</button><button type="button" class="btn plain sm" data-add="2|1.5">+ 2팀 1.5h</button><button type="button" class="btn plain sm" data-add="2|2.5">+ 2팀 2.5h</button></div></div>'+
+  '<label>비고<input id="hp-note" value="'+esc(r.note||'')+'" placeholder="예: E 콤비스마일 정비 / 미드포장기 업스피드 정비"></label>'+
+  '<div class="row"><span class="mu" style="font-size:12px">'+(r.updated_by?'마지막 저장: '+esc(r.updated_by):'')+'</span><div style="display:flex;gap:8px">'+(r.updated_at?'<button type="button" class="btn danger sm" id="hp-del">지우기</button>':'')+'<button class="btn">저장</button></div></div></form>';
+ return h}
+function extRow(x,i){return '<tr data-i="'+i+'"><td><select class="e-team"><option value="1"'+(+x.team===1?' selected':'')+'>1팀</option><option value="2"'+(+x.team===2?' selected':'')+'>2팀</option></select></td>'+
+ '<td class="n"><input class="e-n" type="number" inputmode="numeric" value="'+esc(x.n)+'" style="width:64px"></td><td class="n"><input class="e-h" type="number" step="0.5" inputmode="decimal" value="'+esc(x.h)+'" style="width:70px"></td>'+
+ '<td><input class="e-why" value="'+esc(x.why||'')+'" placeholder="예: F 23시 오후조"></td><td><button type="button" class="link e-del">삭제</button></td></tr>'}
+/* 생산계획 문구에서 연장 대상 라인 찾기: 「A 10~24」 꼴 */
+function lineExt(text){var out=[];String(text||'').replace(/([A-F])(?:\s*[·,]\s*[A-F])*\s*(\d{1,2})\s*[~∼-]\s*(\d{1,2})/g,function(all,h,a,b){var hs=all.match(/[A-F]/g),s=+a,e=+b;if(e<s)e+=24;
+  var two=s<=10&&e>=20,add=two?(e>=24?2.5:e>=23?1.5:0):(e>=16?2.5:e>=15?1.5:0);if(add)hs.forEach(function(x){out.push({h:x,end:e,add:add,two:two})});return all});return out}
+function hpBind(f,by){var kind=f.dataset.kind,d=f.dataset.d,tb=$('#hp-ext tbody');f.addEventListener('click',function(e){e.stopPropagation()});
+ var readExt=function(){return [].map.call(tb.querySelectorAll('tr'),function(tr){return {team:+tr.querySelector('.e-team').value,n:num(tr.querySelector('.e-n').value)||0,h:num(tr.querySelector('.e-h').value)||0,why:tr.querySelector('.e-why').value.trim()}}).filter(function(x){return x.n&&x.h})};
+ var bindRows=function(){[].forEach.call(tb.querySelectorAll('.e-del'),function(b){b.onclick=function(){b.closest('tr').remove()}})};bindRows();
+ [].forEach.call(f.querySelectorAll('[data-add]'),function(b){b.addEventListener('click',function(){var p=b.dataset.add.split('|');tb.insertAdjacentHTML('beforeend',extRow({team:+p[0],n:1,h:+p[1]},tb.children.length));bindRows()})});
+ var sug=function(){var L2=lineExt($('#hp-lines').value);$('#hp-sug').innerHTML=L2.length?'연장 대상: '+L2.map(function(x){return x.h+'호기 '+x.end+'시 종료 → 오후조 1인당 +'+x.add+'h'}).join(' · ')+' — 마지막 라인 기준 조장도 같은 시간':''};
+ sug();$('#hp-lines').addEventListener('input',sug);
+ var use=$('#hp-use');if(use)use.addEventListener('click',function(){var t=use.parentNode.textContent.match(/1팀 (\d+)명 · 2팀 (\d+)명/);if(t){$('#hp-n1').value=t[1];$('#hp-n2').value=t[2]}});
+ var cp=$('#hp-copy');if(cp)cp.addEventListener('click',function(){var p=by.plan[d];if(!p){toast('이 날 예상 입력이 없습니다');return}$('#hp-n1').value=p.t1_n==null?'':p.t1_n;$('#hp-n2').value=p.t2_n==null?'':p.t2_n;$('#hp-lines').value=p.lines||'';tb.innerHTML=(p.ext||[]).map(extRow).join('');bindRows();sug()});
+ var del=$('#hp-del');if(del)del.addEventListener('click',function(){if(del.dataset.arm!=='1'){del.dataset.arm='1';del.textContent='정말 지울까요?';return}api.delHp(d,kind).then(function(){toast('지웠습니다');route()}).catch(fail)});
+ f.addEventListener('submit',function(e){e.preventDefault();var row={d:d,kind:kind,qty:num($('#hp-qty').value),t1_n:num($('#hp-n1').value),t2_n:num($('#hp-n2').value),maint:$('#hp-maint').checked,lines:$('#hp-lines').value.trim()||null,ext:readExt(),note:$('#hp-note').value.trim()||null};
+  api.saveHp(row).then(function(){toast('저장했습니다');route()}).catch(fail)})}
+async function hpExport(wn,days,P,A){try{await needXLSX()}catch(e){toast(errMsg(e));return}
+ var head=[['날 짜','','','생산량(EA)','상온제품 포장1팀','','상온제품 포장2팀','','상온제품 포장팀(합계)','','투입인원','',''],['','','','','투입시간(h)','인시생산성(EA/h)','투입시간(h)','인시생산성(EA/h)','투입시간(h)','인시생산성(EA/h)','(1,2팀)','1팀','2팀']];
+ var block=function(title,list){var a=[[title]].concat(head),pm='';list.forEach(function(o){var m=(+o.d.slice(5,7))+'월';a.push([m!==pm?m:'',(+o.d.slice(8,10))+'일',dw(o.d),o.qty,o.h1,o.p1,o.h2,o.p2,o.h,o.p,o.n,o.n1,o.n2]);pm=m});
+  var s=hpSum(list);a.push(['주 합계','','',s.qty,s.h1,s.p1,s.h2,s.p2,s.h,s.p,s.n,s.n1,s.n2]);return a};
+ var aoa=block('<'+wn+' 예상 인시생산성 >',P).concat([[]]).concat(block('<'+wn+' 실 인시생산성 >',A));
+ var ws=XLSX.utils.aoa_to_sheet(aoa),wb=XLSX.utils.book_new();ws['!cols']=[{wch:6},{wch:6},{wch:4},{wch:12}].concat(Array(9).fill({wch:12}));
+ XLSX.utils.book_append_sheet(wb,ws,wn.replace(/\s/g,''));XLSX.writeFile(wb,'상온포장팀_인시생산성_'+wn.replace(/\s/g,'')+'.xlsx')}
+/* 기존 인시생산성 엑셀(「N월 M주차」 시트의 예상 · 실 표) 가져오기 */
+async function importHp(wb){var n=0,wk=[];
+ for(var si=0;si<wb.SheetNames.length;si++){var sn=wb.SheetNames[si],m0=sn.match(/(\d{1,2})월\s*(\d)주차/);if(!m0)continue;var ws=wb.Sheets[sn],rg=XLSX.utils.decode_range(ws['!ref']),kind=null,mon=null,yr=+today().slice(0,4);
+  for(var r=0;r<=rg.e.r;r++){var a=String(cellV(ws,r,0)||'');if(/예상\s*인시/.test(a)){kind='plan';continue}if(/실\s*인시/.test(a)){kind='act';continue}if(!kind)continue;
+   var mm=a.match(/(\d{1,2})\s*월/);if(mm)mon=+mm[1];var dd=String(cellV(ws,r,1)||'').match(/(\d{1,2})\s*일/);if(!dd||!mon)continue;
+   var d=yr+'-'+pad(mon)+'-'+pad(+dd[1]),qty=num(cellV(ws,r,3)),h1=num(cellV(ws,r,4)),h2=num(cellV(ws,r,6)),n1=num(cellV(ws,r,11)),n2=num(cellV(ws,r,12));
+   if(qty==null&&h1==null&&h2==null)continue;var ext=[];
+   if(h1!=null&&n1!=null&&h1-n1*8>0)ext.push({team:1,n:1,h:h1-n1*8,why:'엑셀 가져오기 (연장 합계)'});
+   if(h2!=null&&n2!=null&&h2-n2*8>0)ext.push({team:2,n:1,h:h2-n2*8,why:'엑셀 가져오기 (연장 합계)'});
+   await api.saveHp({d:d,kind:kind,qty:qty,t1_n:n1,t2_n:n2,maint:qty===0,lines:null,ext:ext,note:null});n++}
+  var sm=wb.Sheets['요약'];if(sm){var rs=XLSX.utils.decode_range(sm['!ref']);for(var r2=1;r2<=rs.e.r;r2++){var dt=String(cellV(sm,r2,0)||''),pl=cellV(sm,r2,1),m2=dt.match(/^(?:(\d{1,2})\/)?(\d{1,2})\s*\(/);if(!m2||!pl)continue;
+    var mo=m2[1]?+m2[1]:+m0[1],dd2=+m2[2];var d2=yr+'-'+pad(mo)+'-'+pad(dd2);
+    var cur=(await api.hp(d2,d2)).filter(function(x){return x.kind==='plan'})[0];if(cur&&!cur.lines){cur.lines=String(pl);await api.saveHp(cur)}}}
+  wk.push(sn)}
+ if(!n)throw new Error('「N월 M주차」 시트에서 예상 · 실 표를 찾지 못했습니다');return wk.join(', ')+'에서 '+n+'일치 기록을 가져왔습니다.'}
+
 /* ================= 일지 작성 바로가기 ================= */
 function linksView(M){var P=(CFG.portal||'').replace(/\/?$/,'/');
  var L2=[['일지 작성 (포장팀)','통합포털 포장팀 일지함','#/journals'],['포장 공정 분석','생산작업일보 · 정지 · 불량팩 자동 분석','#/pack'],['전자결재','결재 요청 · 승인','#/approval']];
@@ -505,6 +619,7 @@ async function adminView(M){var a=await Promise.all([api.profiles(),api.roster()
  h+='<div class="box" style="display:grid;gap:10px"><h3>엑셀 가져오기</h3>'+
   '<label>휴무표 (「N월 휴무표」 시트 — 명단과 휴무 표시를 함께 가져옴)<input type="file" id="x-off" accept=".xlsx,.xls"></label>'+
   '<label>지난 OEE 기록 (OEE 일일 기록 양식 — 일지가 없던 날의 기록 보관용)<input type="file" id="x-oee" accept=".xlsx,.xls"></label>'+
+  '<label>인시생산성 (「N월 M주차」 시트의 예상 · 실 표, 「요약」 시트의 생산계획)<input type="file" id="x-hp" accept=".xlsx,.xls"></label>'+
   '<p class="sub">OEE 엑셀의 용량 · 생산지시량 · 멸균기 적산량 · CIP 종료는 같은 날 일지가 있으면 그 일지의 보완 값으로도 쓰입니다.</p><div id="x-msg"></div></div>';
  M.innerHTML=h;
  [].forEach.call(M.querySelectorAll('[data-p]'),function(b){b.addEventListener('click',function(){var a2=b.dataset.a,p=a2==='on'?{approved:true}:a2==='off'?{approved:false}:{role:a2};api.setProfile(b.dataset.p,p).then(function(){toast('바꿨습니다');route()}).catch(fail)})});
@@ -518,7 +633,8 @@ async function adminView(M){var a=await Promise.all([api.profiles(),api.roster()
  $('#x-oee').addEventListener('change',function(e){importFile(e.target.files[0],importOee)});
  var sg=$('#sy-go');if(sg)sg.addEventListener('click',function(){sg.disabled=true;sg.textContent='받는 중…';$('#sy-msg').innerHTML='<div class="notice info">멸균팀 포털에서 받는 중입니다. 몇 초 걸릴 수 있습니다…</div>';
   api.sterSync($('#sy-f').value,$('#sy-t').value).then(function(r){toast('업무일지 '+r.journal+'건, KPI '+r.kpi+'건을 받았습니다');route()}).catch(function(e){sg.disabled=false;sg.textContent='지금 받기';$('#sy-msg').innerHTML='<div class="notice err">받지 못했습니다: '+esc(errMsg(e))+'</div>'})});
- $('#x-off').addEventListener('change',function(e){importFile(e.target.files[0],importOff)})}
+ $('#x-off').addEventListener('change',function(e){importFile(e.target.files[0],importOff)});
+ $('#x-hp').addEventListener('change',function(e){importFile(e.target.files[0],importHp)})}
 function needXLSX(){if(window.XLSX)return Promise.resolve();return new Promise(function(ok,no){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=ok;s.onerror=function(){no(new Error('엑셀 읽기 도구를 불러오지 못했습니다'))};document.head.appendChild(s)})}
 function importFile(f,fn){if(!f)return;var box=$('#x-msg');box.innerHTML='<div class="notice info">읽는 중…</div>';
  needXLSX().then(function(){return f.arrayBuffer()}).then(function(buf){return fn(XLSX.read(buf,{type:'array'}))})
