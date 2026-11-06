@@ -267,7 +267,7 @@ var CFG=window.PACK_CFG||{};
 var DEMO=!(CFG.url&&CFG.key&&window.supabase);
 var sb=DEMO?null:window.supabase.createClient(CFG.url,CFG.key);
 var EMAIL_PATTERN=CFG.emailPattern||'{emp}@yonsei-pack.local';
-function authEmail(emp){return EMAIL_PATTERN.replace('{emp}',emp)}
+function authEmail(emp){emp=String(emp||'').trim();return emp.indexOf('@')>0?emp.toLowerCase():EMAIL_PATTERN.replace('{emp}',emp)}
 var ME=null;
 var LS='pack_demo_v1';
 function L(){var o;try{o=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}if(!o)o={daily:[],stops:[],roster:[],off:[],seq:1};return o}
