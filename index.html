@@ -803,15 +803,21 @@ async function hpPdfFill(){var pf=$('#hp-pdf-plan').files[0],sf=$('#hp-pdf-sch')
 /* ================= 홈 (대시보드) ================= */
 async function homeView(M){var td=today(),mon=monday(td),days=[];for(var i=0;i<7;i++)days.push(addD(mon,i));
  M.innerHTML='<div class="empty">대시보드를 불러오는 중…</div>';
- await Promise.all([srcPull(false),portalPull(false)]);await sterLoad(mon,td,true);
- var a=await Promise.all([api.daily(mon,td),api.stops(mon,td),api.hp(days[0],days[6]),hpHeads([td]).catch(function(){return {by:{}}})]);
- var rows=build(mon,td,a[0],a[1]),all=agg(rows),hd=a[3].by[td]||null,hpRows=a[2];
+ /* 자료마다 따로 기다리고(최대 12초), 하나가 실패해도 나머지로 화면을 그림 */
+ var bad=[];function soft(p,def,label){return Promise.race([Promise.resolve(p),new Promise(function(_,rj){setTimeout(function(){rj(new Error('응답 시간 초과'))},12000)})]).catch(function(e){console.warn(label,e);bad.push(label+': '+errMsg(e));return def})}
+ var a=await Promise.all([soft(api.daily(mon,td),[],'OEE 보완 자료'),soft(api.stops(mon,td),[],'정지 보완 자료'),soft(api.hp(days[0],days[6]),[],'인시생산성'),soft(hpHeads([td]),{by:{}},'휴무'),
+  soft(srcPull(false),null,'생산 기록'),soft(portalPull(false),null,'통합포털 일지'),soft(sterLoad(mon,td,true),null,'멸균팀 자료')]);
+ if(SRC.state==='loading')SRC.state='error';if(PD.state==='loading')PD.state='error';
+ try{homeRender(M,td,mon,days,a,bad)}catch(e){console.error(e);M.innerHTML='<div class="notice err">대시보드를 그리지 못했습니다: '+esc(errMsg(e))+'</div>'}}
+function homeRender(M,td,mon,days,a,bad){
+ var rows=build(mon,td,a[0]||[],a[1]||[]),all=agg(rows),hd=((a[3]||{}).by||{})[td]||null,hpRows=a[2]||[];
  var main=all.O!=null?all.O:all.AP,cur=curRuns();
  var hpP=hpSum(days.map(function(d){var r=hpRows.filter(function(x){return x.d===d&&x.kind==='plan'})[0];return r?hpCalc(r):null}).filter(Boolean));
  var hpA=hpSum(days.map(function(d){var saved=hpRows.filter(function(x){return x.d===d&&x.kind==='act'})[0],r=Object.assign({d:d},saved||{});
   if(r.qty==null||r.qty===''){var q=actQty(d);if(q==null&&!saved)return null;r.qty=q}return hpCalc(r)}).filter(Boolean));
  var hr=new Date().getHours(),hi=hr<11?'좋은 아침입니다':hr<17?'오늘도 안전한 작업 되세요':'오늘 하루 수고 많으셨습니다';
  var h='<section class="hero"><div class="eyebrow">Yonsei Milk · Ambient Packaging Team</div><h2>'+esc(ME.name)+' 님, '+hi+'</h2><p>'+(+td.slice(5,7))+'월 '+(+td.slice(8,10))+'일 ('+dw(td)+') · '+weekName(mon)+' · 상온제품포장팀 업무포털</p></section>';
+ if(bad.length)h+='<div class="notice">일부 자료를 불러오지 못해 빈 칸으로 보입니다 — '+esc(bad.join(' / '))+'</div>';
  h+='<div class="kpis">'+
   '<div class="kpi" style="--kc:var(--accent)"><div class="kl">이번 주 포장기 OEE</div><div class="kval '+grade(main)+'">'+pct(main)+'</div><div class="ks">'+(all.O!=null?'시간 '+pct(all.A)+' · 성능 '+pct(all.P)+' · 양품 '+pct(all.Q):'시간 × 성능 (양품률 자료 대기)')+'</div></div>'+
   '<div class="kpi" style="--kc:var(--gold)"><div class="kl">지금 생산 중</div><div class="kval">'+cur.length+'<small>개 호기</small></div><div class="ks">'+(cur.length?cur.map(function(r){return esc(r.line)+'호기 '+esc(r.item||'')}).join(' · '):(SRC.state==='ok'?'생산 중인 호기 없음':'생산 기록 연결 확인 필요'))+'</div></div>'+
