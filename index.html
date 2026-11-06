@@ -387,14 +387,19 @@ async function portalPull(force){var c=PC();if(!c){PD.state='off';return}if(!for
  PD.state='loading';try{var r=await c.from('app_state').select('data,updated_at').eq('id',1).maybeSingle();if(r.error)throw r.error;
   if(!r.data||!r.data.data){PD.state='error';PD.err='통합포털 자료를 읽을 권한이 없습니다';return}PD.data=r.data.data;PD.updated=r.data.updated_at;PD.at=Date.now();PD.state='ok';PD.err=''}
  catch(e){PD.state='error';PD.err=errMsg(e)}}
-async function portalLogin(emp,pw){var c=PC();emp=String(emp||'').trim().toLowerCase();var ap='Yp!'+(await sha256('supa::'+emp+'::'+pw)).slice(0,40),list=[];
+async function portalLogin(emp,pw,step){var c=PC();emp=String(emp||'').trim().toLowerCase();step=step||function(){};var list=[];
  function add(x){x=String(x||'').trim().toLowerCase();if(x&&x.indexOf('@')>0&&list.indexOf(x)<0)list.push(x)}
  if(emp.indexOf('@')>0){add(emp);emp=emp.split('@')[0]}
- /* 부문 업무포털이 쓰는 순서와 같게: 회원 명단의 로그인 주소 → 사번 색인 → 사번@yonsei.local → 사번_2~4@yonsei.local */
- try{var q=await c.from('app_state').select('users:data->users').eq('id',1).maybeSingle();((q.data&&q.data.users)||[]).forEach(function(u){if(String(u.empNo||'').toLowerCase()===emp){add(u.authEmail);add(u.email)}})}catch(e){}
+ var ap='Yp!'+(await sha256('supa::'+emp+'::'+pw)).slice(0,40);
+ /* 부문 업무포털과 같은 순서: 사번 색인의 로그인 주소 → 사번@yonsei.local (서버가 느릴 수 있어 요청 수를 최소로) */
+ step('부문 업무포털 확인 중…');
  try{var u=await c.from('user_index').select('email').eq('emp_no',emp).maybeSingle();if(u.data)add(u.data.email)}catch(e){}
- add(emp+'@yonsei.local');for(var n=2;n<=4;n++)add(emp+'_'+n+'@yonsei.local');
- for(var i=0;i<list.length;i++){var r=await c.auth.signInWithPassword({email:list[i],password:ap});if(!r.error)return true;if(pw.length>=6){r=await c.auth.signInWithPassword({email:list[i],password:pw});if(!r.error)return true}}
+ add(emp+'@yonsei.local');
+ var net=null;
+ for(var i=0;i<list.length;i++){var pws=[ap];if(pw.length>=6)pws.push(pw);
+  for(var j=0;j<pws.length;j++){step('부문 업무포털 로그인 중… ('+(i+1)+'/'+list.length+')');var r=await c.auth.signInWithPassword({email:list[i],password:pws[j]});if(!r.error)return true;
+   var m=String(r.error.message||''),st=r.error.status||0;if(!/invalid|credentials|not confirmed/i.test(m)&&(st===0||st>=500||st===429||/fetch|network|timeout|rate/i.test(m)))net=m||('status '+st)}}
+ if(net)throw new Error('부문 업무포털 서버가 응답하지 않습니다 ('+net+'). 잠시 뒤 다시 해 주세요.');
  return false}
 function pForm(code){return ((PD.data&&PD.data.forms)||[]).filter(function(f){return f.code===code})[0]}
 function pDate(d){return String((d.data&&d.data.pdate)||d.savedAt||d.updatedAt||d.createdAt||'').slice(0,10)}
@@ -477,11 +482,11 @@ function authView(mode){mode=mode||'login';var sso=mode==='login';
   '<div class="mu" style="font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center">'+
   (sso?'<a class="link" href="javascript:P.auth(\'local\')">포장팀 사이트 계정으로 로그인</a>':'<a class="link" href="javascript:P.auth(\'login\')">← 부문 업무포털 계정으로 로그인</a>'+(mode==='local'?'<a class="link" href="javascript:P.auth(\'join\')">가입 신청</a>':''))+'</div></div>'}
 /* 부문 업무포털 연동 로그인: 부문 포털에 로그인 → 그 토큰을 포장팀 Supabase 함수(portal-login)가 확인 → 포장팀 계정으로 로그인 */
-async function ssoLogin(emp,pw){
+async function ssoLogin(emp,pw,step){step=step||function(){};
  if(!PC())throw new Error('부문 업무포털에 연결하지 못했습니다 (인터넷 확인)');
- if(!(await portalLogin(emp,pw)))throw new Error('사번 또는 비밀번호가 맞지 않습니다 (부문 업무포털 기준).');
+ if(!(await portalLogin(emp,pw,step)))throw new Error('사번 또는 비밀번호가 맞지 않습니다 (부문 업무포털 기준).');
  var se=(await PC().auth.getSession()).data.session;if(!se)throw new Error('부문 업무포털 로그인을 확인하지 못했습니다.');
- var r;try{r=await fetch(CFG.url.replace(/\/$/,'')+'/functions/v1/portal-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.key},body:JSON.stringify({token:se.access_token})})}
+ step('포장팀 계정 연결 중…');var r;try{r=await fetch(CFG.url.replace(/\/$/,'')+'/functions/v1/portal-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.key},body:JSON.stringify({token:se.access_token})})}
  catch(e){throw new Error('연동 로그인 기능에 닿지 못했습니다. 관리자가 portal-login 기능을 올렸는지 확인해 주세요. (그동안은 아래 「포장팀 사이트 계정으로 로그인」)')}
  var j={};try{j=await r.json()}catch(e){}
  if(r.status===404)throw new Error('연동 로그인 기능(portal-login)이 아직 올라가 있지 않습니다. 그동안은 아래 「포장팀 사이트 계정으로 로그인」을 쓰세요.');
@@ -493,7 +498,7 @@ function bindAuth(mode){mode=mode||'login';$('#authForm').addEventListener('subm
   if(!/^[a-z0-9._-]+$/i.test(emp)&&emp.indexOf('@')<0){msg.textContent='사번은 영문·숫자로 입력하세요.';msg.hidden=false;return}
   btn.disabled=true;var bt=btn.textContent;btn.textContent='확인 중…';
   var email=authEmail(emp),r;
-  try{if(mode==='login'){await ssoLogin(emp,pw);await boot();return}
+  try{if(mode==='login'){await ssoLogin(emp,pw,function(t){btn.textContent=t});await boot();return}
    if(mode==='join'){r=await sb.auth.signUp({email:email,password:pw,options:{data:{name:$('#a-name').value.trim(),emp_no:emp}}});if(r.error)throw r.error;if(!r.data.session)r=await sb.auth.signInWithPassword({email:email,password:pw})}
    else r=await sb.auth.signInWithPassword({email:email,password:pw});if(r.error)throw r.error;await boot()}
   catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';if(/email address .* is invalid/i.test(m))m='가입용 주소 형식을 Supabase가 받지 않습니다. config.js의 emailPattern을 실제 메일 도메인으로 바꿔 주세요.';msg.textContent=m;msg.hidden=false}
