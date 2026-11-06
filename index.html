@@ -388,7 +388,12 @@ async function portalPull(force){var c=PC();if(!c){PD.state='off';return}if(!for
   if(!r.data||!r.data.data){PD.state='error';PD.err='통합포털 자료를 읽을 권한이 없습니다';return}PD.data=r.data.data;PD.updated=r.data.updated_at;PD.at=Date.now();PD.state='ok';PD.err=''}
  catch(e){PD.state='error';PD.err=errMsg(e)}}
 async function portalLogin(emp,pw){var c=PC();emp=String(emp||'').trim().toLowerCase();var ap='Yp!'+(await sha256('supa::'+emp+'::'+pw)).slice(0,40),list=[];
- if(emp.indexOf('@')>0)list.push(emp);else{try{var u=await c.from('user_index').select('email').eq('emp_no',emp).maybeSingle();if(u.data&&u.data.email)list.push(String(u.data.email).toLowerCase())}catch(e){}if(list.indexOf(emp+'@yonsei.local')<0)list.push(emp+'@yonsei.local')}
+ function add(x){x=String(x||'').trim().toLowerCase();if(x&&x.indexOf('@')>0&&list.indexOf(x)<0)list.push(x)}
+ if(emp.indexOf('@')>0){add(emp);emp=emp.split('@')[0]}
+ /* 부문 업무포털이 쓰는 순서와 같게: 회원 명단의 로그인 주소 → 사번 색인 → 사번@yonsei.local → 사번_2~4@yonsei.local */
+ try{var q=await c.from('app_state').select('users:data->users').eq('id',1).maybeSingle();((q.data&&q.data.users)||[]).forEach(function(u){if(String(u.empNo||'').toLowerCase()===emp){add(u.authEmail);add(u.email)}})}catch(e){}
+ try{var u=await c.from('user_index').select('email').eq('emp_no',emp).maybeSingle();if(u.data)add(u.data.email)}catch(e){}
+ add(emp+'@yonsei.local');for(var n=2;n<=4;n++)add(emp+'_'+n+'@yonsei.local');
  for(var i=0;i<list.length;i++){var r=await c.auth.signInWithPassword({email:list[i],password:ap});if(!r.error)return true;if(pw.length>=6){r=await c.auth.signInWithPassword({email:list[i],password:pw});if(!r.error)return true}}
  return false}
 function pForm(code){return ((PD.data&&PD.data.forms)||[]).filter(function(f){return f.code===code})[0]}
