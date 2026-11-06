@@ -84,6 +84,15 @@ alter table public.oee_daily add column if not exists codes jsonb;
 - MTBF = 순생산 시간 ÷ 고장 횟수, MTTR = 고장 정지시간 ÷ 고장 횟수
 - CAPA: A·B·D·E 24,000 / C 6,000 / F 40,000 개/h, D호기는 2026-10-30부터 26,500 (`index.html`의 `CAPA`, `CAPA_CHG`)
 
+## 부문 업무포털 연동 로그인
+팀원은 **부문 업무포털과 같은 사번 · 비밀번호**로 로그인합니다. 처음 로그인하면 포장팀 사이트 계정이 자동으로 만들어지고, 포장팀 일지 연결도 같이 됩니다.
+1. **Edge Functions → Deploy a new function → Via Editor**: 이름 `portal-login`, `supabase/functions/portal-login/index.ts` 내용을 붙여 넣고 **Deploy**.
+2. 함수 화면 **Details**에서 **Verify JWT**(Enforce JWT verification)를 **끄고** Save. 이 함수는 부문 업무포털 토큰을 직접 검사합니다.
+- 부문 업무포털에서 **포장팀**으로 승인된 사람은 자동 승인, 다른 팀은 관리 탭에서 승인합니다.
+- 이미 포장팀 사이트에 가입한 사람은 **같은 사번** 계정으로 그대로 이어집니다.
+- 연동 전 계정은 로그인 화면 아래 「포장팀 사이트 계정으로 로그인」으로도 들어올 수 있습니다.
+- 휴무 체크 본인 줄은 이름으로 맞추므로, 부문 업무포털 이름이 휴무 명단 이름과 같아야 합니다.
+
 ## 보안
 - 화면 코드(공개)에는 팀 자료가 들어 있지 않습니다. 모든 자료는 Supabase에 있고, **관리자가 승인한 사람만** 읽고 쓸 수 있습니다.
 - 휴무 칸은 **본인 이름 줄만** 고칠 수 있고, 관리자는 전체를 고칠 수 있습니다 (Supabase 규칙으로 막혀 있음).

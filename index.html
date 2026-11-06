@@ -462,18 +462,37 @@ function agg(list){var s={n:list.length,occ:0,net:0,down:0,ideal:0,qty:0,L:0,ste
 async function loadMe(){if(DEMO){ME={id:'demo',name:'데모 관리자',emp_no:'demo',role:'admin',approved:true};return}
  var s=await sb.auth.getSession();var u=s.data&&s.data.session&&s.data.session.user;if(!u){ME=null;return}
  var r=await sb.from('profiles').select('*').eq('id',u.id).maybeSingle();ME=r.data||{id:u.id,name:(u.user_metadata||{}).name||'',approved:false,role:'member'}}
-function authView(mode){mode=mode||'login';
- return '<div class="auth"><div><h2>'+(mode==='login'?'로그인':'가입 신청')+'</h2><p class="sub">'+(mode==='login'?'사번과 비밀번호로 로그인하세요.':'가입하면 관리자가 승인한 뒤부터 사용할 수 있습니다. 이름은 휴무표의 이름과 똑같이 적어 주세요.')+'</p></div>'+
-  '<div class="tabs2"><button class="btn '+(mode==='login'?'':'plain')+' sm" onclick="P.auth(\'login\')">로그인</button><button class="btn '+(mode==='join'?'':'plain')+' sm" onclick="P.auth(\'join\')">가입 신청</button></div>'+
+function authView(mode){mode=mode||'login';var sso=mode==='login';
+ var title=sso?'로그인':mode==='join'?'가입 신청 (포장팀 사이트 계정)':'포장팀 사이트 계정으로 로그인';
+ var sub=sso?'<b>부문 업무포털</b>과 같은 사번 · 비밀번호로 로그인합니다. 처음 로그인하면 포장팀 사이트 계정이 자동으로 만들어지고, 포장팀 일지도 함께 연결됩니다.':mode==='join'?'가입하면 관리자가 승인한 뒤부터 사용할 수 있습니다. 이름은 휴무표의 이름과 똑같이 적어 주세요.':'부문 업무포털 연동 전에 만든 포장팀 사이트 계정용입니다.';
+ return '<div class="auth"><div><h2>'+title+'</h2><p class="sub">'+sub+'</p></div>'+
   '<form class="box" id="authForm" style="display:grid;gap:12px">'+(mode==='join'?'<label>이름<input id="a-name" required autocomplete="name"></label>':'')+
-  '<label>사번<input id="a-emp" required autocomplete="username"></label><label>비밀번호 (6자 이상)<input id="a-pw" type="password" required minlength="6" autocomplete="'+(mode==='login'?'current-password':'new-password')+'"></label>'+
-  '<button class="btn">'+(mode==='login'?'로그인':'가입 신청')+'</button><div id="a-msg" class="notice err" hidden></div></form></div>'}
-function bindAuth(mode){$('#authForm').addEventListener('submit',async function(e){e.preventDefault();var emp=$('#a-emp').value.trim().toLowerCase(),pw=$('#a-pw').value,msg=$('#a-msg');msg.hidden=true;
-  if(!/^[a-z0-9._-]+$/i.test(emp)){msg.textContent='사번은 영문·숫자로 입력하세요.';msg.hidden=false;return}
+  '<label>사번<input id="a-emp" required autocomplete="username"></label><label>비밀번호<input id="a-pw" type="password" required autocomplete="'+(mode==='join'?'new-password':'current-password')+'"'+(sso?'':' minlength="6"')+'></label>'+
+  '<button class="btn">'+(mode==='join'?'가입 신청':'로그인')+'</button><div id="a-msg" class="notice err" hidden></div></form>'+
+  '<div class="mu" style="font-size:12.5px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center">'+
+  (sso?'<a class="link" href="javascript:P.auth(\'local\')">포장팀 사이트 계정으로 로그인</a>':'<a class="link" href="javascript:P.auth(\'login\')">← 부문 업무포털 계정으로 로그인</a>'+(mode==='local'?'<a class="link" href="javascript:P.auth(\'join\')">가입 신청</a>':''))+'</div></div>'}
+/* 부문 업무포털 연동 로그인: 부문 포털에 로그인 → 그 토큰을 포장팀 Supabase 함수(portal-login)가 확인 → 포장팀 계정으로 로그인 */
+async function ssoLogin(emp,pw){
+ if(!PC())throw new Error('부문 업무포털에 연결하지 못했습니다 (인터넷 확인)');
+ if(!(await portalLogin(emp,pw)))throw new Error('사번 또는 비밀번호가 맞지 않습니다 (부문 업무포털 기준).');
+ var se=(await PC().auth.getSession()).data.session;if(!se)throw new Error('부문 업무포털 로그인을 확인하지 못했습니다.');
+ var r;try{r=await fetch(CFG.url.replace(/\/$/,'')+'/functions/v1/portal-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.key},body:JSON.stringify({token:se.access_token})})}
+ catch(e){throw new Error('연동 로그인 기능에 닿지 못했습니다. 관리자가 portal-login 기능을 올렸는지 확인해 주세요. (그동안은 아래 「포장팀 사이트 계정으로 로그인」)')}
+ var j={};try{j=await r.json()}catch(e){}
+ if(r.status===404)throw new Error('연동 로그인 기능(portal-login)이 아직 올라가 있지 않습니다. 그동안은 아래 「포장팀 사이트 계정으로 로그인」을 쓰세요.');
+ if(r.status===401&&!j.error)throw new Error('portal-login 기능 설정에서 JWT 검사(Verify JWT)를 꺼 주세요.');
+ if(!r.ok||!j.token_hash)throw new Error(j.error||j.message||('연동 로그인 실패 ('+r.status+')'));
+ var v=await sb.auth.verifyOtp({token_hash:j.token_hash,type:'magiclink'});if(v.error)throw v.error;
+ PD.state='idle';return j}
+function bindAuth(mode){mode=mode||'login';$('#authForm').addEventListener('submit',async function(e){e.preventDefault();var emp=$('#a-emp').value.trim().toLowerCase(),pw=$('#a-pw').value,msg=$('#a-msg'),btn=this.querySelector('button');msg.hidden=true;
+  if(!/^[a-z0-9._-]+$/i.test(emp)&&emp.indexOf('@')<0){msg.textContent='사번은 영문·숫자로 입력하세요.';msg.hidden=false;return}
+  btn.disabled=true;var bt=btn.textContent;btn.textContent='확인 중…';
   var email=authEmail(emp),r;
-  try{if(mode==='join'){r=await sb.auth.signUp({email:email,password:pw,options:{data:{name:$('#a-name').value.trim(),emp_no:emp}}});if(r.error)throw r.error;if(!r.data.session)r=await sb.auth.signInWithPassword({email:email,password:pw})}
+  try{if(mode==='login'){await ssoLogin(emp,pw);await boot();return}
+   if(mode==='join'){r=await sb.auth.signUp({email:email,password:pw,options:{data:{name:$('#a-name').value.trim(),emp_no:emp}}});if(r.error)throw r.error;if(!r.data.session)r=await sb.auth.signInWithPassword({email:email,password:pw})}
    else r=await sb.auth.signInWithPassword({email:email,password:pw});if(r.error)throw r.error;await boot()}
-  catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';if(/email address .* is invalid/i.test(m))m='가입용 주소 형식을 Supabase가 받지 않습니다. config.js의 emailPattern을 실제 메일 도메인으로 바꿔 주세요.';msg.textContent=m;msg.hidden=false}})}
+  catch(err){var m=errMsg(err);if(/Invalid login/i.test(m))m='사번 또는 비밀번호가 맞지 않습니다.';if(/already registered/i.test(m))m='이미 가입된 사번입니다. 로그인하세요.';if(/Email not confirmed/i.test(m))m='Supabase에서 Confirm email을 꺼야 합니다.';if(/email address .* is invalid/i.test(m))m='가입용 주소 형식을 Supabase가 받지 않습니다. config.js의 emailPattern을 실제 메일 도메인으로 바꿔 주세요.';msg.textContent=m;msg.hidden=false}
+  finally{btn.disabled=false;btn.textContent=bt}})}
 
 /* ================= 화면 전환 ================= */
 var TABS=['home','oee','off','hp','links','admin'];
@@ -917,7 +936,7 @@ async function importOff(wb){var names=wb.SheetNames.filter(function(n){return /
  for(var k=0;k<cells.length;k+=300)await api.setOff(cells.slice(k,k+300));
  return '명단 '+roster.list.length+'명('+roster.ym+' 기준)과 휴무 표시 '+cells.length+'칸을 가져왔습니다 ('+months.sort().join(', ')+').'}
 
-window.P={auth:function(m){$('#main').innerHTML=authView(m);bindAuth(m)},logout:function(){sb.auth.signOut().then(boot)},boot:boot,_build:build,_src:SRC};
+window.P={auth:function(m){$('#main').innerHTML=authView(m);bindAuth(m)},logout:function(){var c=PC();Promise.resolve(c&&c.auth.signOut()).catch(function(){}).then(function(){PD={data:null,at:0,state:'idle',err:''};return sb.auth.signOut()}).then(boot)},boot:boot,_build:build,_src:SRC};
 boot().catch(function(e){console.error(e);$('#main').innerHTML='<div class="notice err">시작하지 못했습니다: '+esc(errMsg(e))+'</div>'});
 })();
 </script>
